@@ -9,9 +9,9 @@
 	  <PackageId>FluentTaskScheduler</PackageId>
 	  <Version>0.1.0</Version>
 	  <Authors>Onur Köse</Authors>
-	  <Description>Fluent DSL background job scheduler for .NET</Description>
+	  <Description>Fluent API-based background task scheduler for .NET</Description>
 	  <PackageTags>scheduler;fluent;dotnet;DSL;background;jobs;task</PackageTags>
-	  <RepositoryUrl>https://github.com/onur-kose/fluent-scheduler</RepositoryUrl>
+	  <RepositoryUrl>https://github.com/onur-kose/FluentTaskScheduler</RepositoryUrl>
 	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
