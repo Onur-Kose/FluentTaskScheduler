@@ -40,17 +40,6 @@ namespace FluentTaskScheduler.Execution
 
                         job.IsRunning = true;
 
-                        if (job.IntervalStart.HasValue && job.IntervalEnd.HasValue)
-                        {
-                            var nowTime = now.TimeOfDay;
-                            if (nowTime < job.IntervalStart.Value || nowTime >= job.IntervalEnd.Value)
-                            {
-                                _logger.LogWarning("Skipping job '{Name}' — current time outside interval ({Start} - {End})",
-                                    job.Name, job.IntervalStart, job.IntervalEnd);
-                            }
-                        }
-
-
                         _ = Task.Run(async () =>
                         {
                             try
