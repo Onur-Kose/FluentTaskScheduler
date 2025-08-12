@@ -32,6 +32,25 @@ namespace FluentTaskScheduler.Execution
                 {
                     if (job.NextRun == default || job.NextRun <= now)
                     {
+                        if (job.IsRunning)
+                        {
+                            _logger.LogWarning("Job is already running: {Name}", job.Name);
+                            continue;
+                        }
+
+                        job.IsRunning = true;
+
+                        if (job.IntervalStart.HasValue && job.IntervalEnd.HasValue)
+                        {
+                            var nowTime = now.TimeOfDay;
+                            if (nowTime < job.IntervalStart.Value || nowTime >= job.IntervalEnd.Value)
+                            {
+                                _logger.LogWarning("Skipping job '{Name}' — current time outside interval ({Start} - {End})",
+                                    job.Name, job.IntervalStart, job.IntervalEnd);
+                            }
+                        }
+
+
                         _ = Task.Run(async () =>
                         {
                             try
@@ -42,6 +61,10 @@ namespace FluentTaskScheduler.Execution
                             catch (Exception ex)
                             {
                                 _logger.LogError(ex, "Job failed: {Name}", job.Name);
+                            }
+                            finally
+                            {
+                                job.IsRunning = false;
                             }
                         }, stoppingToken);
 
@@ -57,30 +80,68 @@ namespace FluentTaskScheduler.Execution
 
         private static DateTime CalculateNextRun(DateTime now, TimedJobConfig job)
         {
-            if (job.DailyAt.HasValue)
+            DateTime nextRun = now;
+
+            if (job.DailyAtTimes is { Count: > 0 })
             {
-                var todayTime = now.Date + job.DailyAt.Value;
-                return todayTime > now ? todayTime : todayTime.AddDays(1);
+                var today = now.Date;
+
+                var upcomingToday = job.DailyAtTimes
+                    .Select(t => today + t)
+                    .Where(t => t > now)
+                    .OrderBy(t => t)
+                    .FirstOrDefault();
+
+                if (upcomingToday != default)
+                {
+                    nextRun = upcomingToday;
+                }
+                else
+                {
+                    
+                    var tomorrow = now.Date.AddDays(1);
+                    nextRun = tomorrow + job.DailyAtTimes.Min();
+                }
             }
 
-            if (job.IntervalStart.HasValue && job.IntervalEnd.HasValue && job.RepeatEvery.HasValue)
+            else if (job.IntervalStart.HasValue && job.IntervalEnd.HasValue && job.RepeatEvery.HasValue)
             {
                 var timeOfDay = now.TimeOfDay;
+
                 if (timeOfDay < job.IntervalStart.Value)
-                    return now.Date + job.IntervalStart.Value;
+                    nextRun = now.Date + job.IntervalStart.Value;
 
-                if (timeOfDay >= job.IntervalEnd.Value)
-                    return now.Date + TimeSpan.FromDays(1) + job.IntervalStart.Value;
+                else if (timeOfDay >= job.IntervalEnd.Value)
+                    nextRun = (now.Date + TimeSpan.FromDays(1)) + job.IntervalStart.Value;
 
-                return now + job.RepeatEvery.Value;
+                else
+                {
+                    var tentativeNext = now + job.RepeatEvery.Value;
+                    if (tentativeNext.TimeOfDay >= job.IntervalEnd.Value)
+                    {
+                        nextRun = now.Date.AddDays(1) + job.IntervalStart.Value;
+                    }
+                    else
+                    {
+                        nextRun = tentativeNext;
+                    }
+                }
             }
 
-            if (job.RepeatEvery.HasValue)
+            else if (job.RepeatEvery.HasValue)
             {
-                return now + job.RepeatEvery.Value;
+                nextRun = now + job.RepeatEvery.Value;
+            }
+            else
+            {
+                nextRun = now.AddDays(1);
             }
 
-            return now.AddDays(1); // fallback
+            while (job.ExcludedDays?.Contains(nextRun.DayOfWeek) == true)
+            {
+                nextRun = nextRun.AddDays(1);
+            }
+            return nextRun;
         }
     }
 }
