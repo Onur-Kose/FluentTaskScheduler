@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
-namespace FluentRunly.Sandbox
+namespace FluentTaskScheduler.Sandbox
 {
     public class MyService : IMyService
     {

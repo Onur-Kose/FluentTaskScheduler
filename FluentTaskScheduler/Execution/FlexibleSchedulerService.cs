@@ -1,9 +1,9 @@
-﻿using FluentRunly.Core;
+﻿using FluentTaskScheduler.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace FluentRunly.Execution
+namespace FluentTaskScheduler.Execution
 {
     public class FlexibleSchedulerService : BackgroundService
     {
