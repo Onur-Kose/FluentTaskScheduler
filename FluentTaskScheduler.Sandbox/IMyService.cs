@@ -1,4 +1,4 @@
-﻿namespace FluentTaskScheduler.Sandbox
+﻿namespace FluentRunly.Sandbox
 {
     public interface IMyService
     {

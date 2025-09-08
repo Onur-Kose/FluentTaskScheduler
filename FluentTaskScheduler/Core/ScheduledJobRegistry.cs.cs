@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace FluentTaskScheduler.Core
+namespace FluentRunly.Core
 {
     public class ScheduledJobRegistry : IScheduledJobRegistry
     {

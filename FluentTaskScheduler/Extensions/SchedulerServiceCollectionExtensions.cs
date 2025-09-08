@@ -1,8 +1,8 @@
-﻿using FluentTaskScheduler.Core;
-using FluentTaskScheduler.Execution;
+﻿using FluentRunly.Core;
+using FluentRunly.Execution;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace FluentTaskScheduler.Extensions
+namespace FluentRunly.Extensions
 {
     public static class SchedulerServiceCollectionExtensions
     {

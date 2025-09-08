@@ -1,9 +1,9 @@
-﻿using FluentTaskScheduler.Core;
+﻿using FluentRunly.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace FluentTaskScheduler.Execution
+namespace FluentRunly.Execution
 {
     public class FlexibleSchedulerService : BackgroundService
     {
@@ -101,7 +101,7 @@ namespace FluentTaskScheduler.Execution
                     nextRun = now.Date + job.IntervalStart.Value;
 
                 else if (timeOfDay >= job.IntervalEnd.Value)
-                    nextRun = (now.Date + TimeSpan.FromDays(1)) + job.IntervalStart.Value;
+                    nextRun = now.Date + TimeSpan.FromDays(1) + job.IntervalStart.Value;
 
                 else
                 {

@@ -1,8 +1,8 @@
 ﻿using System.Linq.Expressions;
 using Microsoft.Extensions.DependencyInjection;
-using FluentTaskScheduler.Core;
+using FluentRunly.Core;
 
-namespace FluentTaskScheduler.DSL
+namespace FluentRunly.DSL
 {
     public class SchedulerBuilder<T> where T : notnull
     {

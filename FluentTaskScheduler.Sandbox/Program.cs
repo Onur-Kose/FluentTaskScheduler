@@ -1,7 +1,7 @@
-﻿using FluentTaskScheduler.Core;
-using FluentTaskScheduler.DSL;
-using FluentTaskScheduler.Execution;
-using FluentTaskScheduler.Sandbox;
+﻿using FluentRunly.Core;
+using FluentRunly.DSL;
+using FluentRunly.Execution;
+using FluentRunly.Sandbox;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 

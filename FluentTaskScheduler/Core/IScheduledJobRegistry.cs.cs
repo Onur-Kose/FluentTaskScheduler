@@ -1,4 +1,4 @@
-﻿namespace FluentTaskScheduler.Core
+﻿namespace FluentRunly.Core
 {
     public interface IScheduledJobRegistry
     {
