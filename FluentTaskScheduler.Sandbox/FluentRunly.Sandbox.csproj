@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FluentTaskScheduler\FluentTaskScheduler.csproj" />
+    <ProjectReference Include="..\FluentTaskScheduler\FluentRunly.csproj" />
   </ItemGroup>
 
 </Project>

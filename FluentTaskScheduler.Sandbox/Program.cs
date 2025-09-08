@@ -21,6 +21,8 @@ new SchedulerBuilder<IMyService>(host.Services)
     .Every(TimeSpan.FromSeconds(10))
     .Between("14:00", "14:36")
     .Do();
+
+
 //<== Test Place
 
 await host.RunAsync();
