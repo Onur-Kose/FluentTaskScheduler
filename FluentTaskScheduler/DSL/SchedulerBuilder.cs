@@ -19,39 +19,17 @@ namespace FluentTaskScheduler.DSL
 
         public SchedulerBuilder<T> For(Expression<Func<T, Task>> method, string? name)
         {
-            _steps.Clear(); 
+            _steps.Clear();
             _steps.Add(method);
-
-
-            // Smart name generation
-            if (string.IsNullOrEmpty(name))
-            {
-                var methodName = ExtractMethodName(method);
-                name = GenerateJobName(methodName);
-            }
-
-
-            _config.Name = name;
-            
+            _config.Name = GetOrGenerateJobName(method, name);
             return this;
         }
 
-        public SchedulerBuilder<T> ThenFor(Expression<Func<T, Task>> method, string? name)
+        public SchedulerBuilder<T> ThenFor(Expression<Func<T, Task>> method)
         {
-            if(_steps.Count == 0 )
+            if (_steps.Count == 0)
                 throw new InvalidOperationException("Cannot use ThenFor(...) before calling For(...). Define the initial step first.");
             _steps.Add(method);
-
-            // Smart name generation
-            if (string.IsNullOrEmpty(name))
-            {
-                var methodName = ExtractMethodName(method);
-                name = GenerateJobName(methodName);
-            }
-
-            _config.Name = name;
-
-
             return this;
         }
 
@@ -111,6 +89,7 @@ namespace FluentTaskScheduler.DSL
             _config.ExcludedDays = days;
             return this;
         }
+
         public void Do()
         {
             if (_steps.Count == 0)
@@ -137,11 +116,23 @@ namespace FluentTaskScheduler.DSL
         }
 
         /// <summary>
+        /// Verilen ismi döndürür, eğer boş ise metod adından job ismi oluşturur
+        /// </summary>
+        private static string GetOrGenerateJobName(Expression<Func<T, Task>> method, string? name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                var methodName = ExtractMethodName(method);
+                return GenerateJobName(methodName);
+            }
+            return name + GenerateShortId();
+        }
+
+        /// <summary>
         /// Kısa, unique ID oluşturur (6 karakter)
         /// </summary>
         private static string GenerateShortId()
         {
-            // Karışık karakterleri çıkardık: 0,1,O,I,L (okunabilirlik için)
             const string chars = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
             var bytes = new byte[4];
 
@@ -167,13 +158,10 @@ namespace FluentTaskScheduler.DSL
         {
             return expression.Body switch
             {
-                // x => x.MethodName() şeklindeki çağrılar
                 MethodCallExpression methodCall => methodCall.Method.Name.Replace("Async", ""),
 
-                // x => x.Property şeklindeki property erişimleri  
                 MemberExpression memberAccess => memberAccess.Member.Name,
 
-                // Diğer expression türleri
                 _ => "UnknownMethod"
             };
         }
