@@ -87,7 +87,7 @@ namespace FluentTaskScheduler.Execution
                 }
                 else
                 {
-                    
+
                     var tomorrow = now.Date.AddDays(1);
                     nextRun = tomorrow + job.DailyAtTimes.Min();
                 }

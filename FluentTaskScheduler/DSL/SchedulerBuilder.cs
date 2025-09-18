@@ -1,6 +1,6 @@
-﻿using System.Linq.Expressions;
+﻿using FluentTaskScheduler.Core;
 using Microsoft.Extensions.DependencyInjection;
-using FluentTaskScheduler.Core;
+using System.Linq.Expressions;
 
 namespace FluentTaskScheduler.DSL
 {
@@ -17,7 +17,7 @@ namespace FluentTaskScheduler.DSL
             _registry = _serviceProvider.GetRequiredService<IScheduledJobRegistry>();
         }
 
-        public SchedulerBuilder<T> For(Expression<Func<T, Task>> method, string? name)
+        public SchedulerBuilder<T> For(Expression<Func<T, Task>> method, string? name = null)
         {
             _steps.Clear();
             _steps.Add(method);
@@ -120,7 +120,7 @@ namespace FluentTaskScheduler.DSL
         /// </summary>
         private static string GetOrGenerateJobName(Expression<Func<T, Task>> method, string? name)
         {
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrWhiteSpace(name))
             {
                 var methodName = ExtractMethodName(method);
                 return GenerateJobName(methodName);

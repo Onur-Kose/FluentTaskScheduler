@@ -1,5 +1,5 @@
-﻿using FluentTaskScheduler.DSL;
-using FluentTaskScheduler.Core;
+﻿using FluentTaskScheduler.Core;
+using FluentTaskScheduler.DSL;
 using FluentTaskScheduler.Execution;
 using FluentTaskScheduler.Sandbox;
 using Microsoft.Extensions.DependencyInjection;
