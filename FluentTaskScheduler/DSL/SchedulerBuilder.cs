@@ -8,7 +8,7 @@ namespace FluentTaskScheduler.DSL
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly IScheduledJobRegistry _registry;
-        private readonly TimedJobConfig _config = new();
+        private TimedJobConfig _config = null!;
         private readonly List<Expression<Func<T, Task>>> _steps = [];
 
         public SchedulerBuilder(IServiceProvider serviceProvider)
@@ -19,6 +19,7 @@ namespace FluentTaskScheduler.DSL
 
         public SchedulerBuilder<T> For(Expression<Func<T, Task>> method, string? name = null)
         {
+            _config = new TimedJobConfig();
             _steps.Clear();
             _steps.Add(method);
             _config.Name = GetOrGenerateJobName(method, name);
@@ -101,7 +102,11 @@ namespace FluentTaskScheduler.DSL
             if (_config.ExcludedDays?.Length == 7)
                 throw new InvalidOperationException("All days are excluded. The job would never run. Change NotRunThisDays");
 
-
+            if ((_config.IntervalStart.HasValue || _config.IntervalEnd.HasValue) && !_config.RepeatEvery.HasValue)
+            {
+                throw new InvalidOperationException(
+                    "When using .Between(...), you must also specify .Every(...)");
+            }
             _config.Action = async sp =>
             {
                 var instance = sp.GetRequiredService<T>();
@@ -111,6 +116,8 @@ namespace FluentTaskScheduler.DSL
                     await func(instance);
                 }
             };
+
+            _config.NextRun = CalculateInitialNextRun();
 
             _registry.AddJob(_config);
         }
@@ -173,11 +180,71 @@ namespace FluentTaskScheduler.DSL
         {
             var serviceTypeName = typeof(T).Name
                 .Replace("Service", "")
-                .Replace("I", ""); // Interface prefix'ini kaldır
+                .Replace("I", "");
 
             var shortId = GenerateShortId();
 
             return $"{serviceTypeName}_{methodName}_{shortId}";
+        }
+
+        /// <summary>
+        /// Başlangıç için ilk çalıştırma zamanını hesapla
+        /// </summary>
+        private DateTime CalculateInitialNextRun()
+        {
+            var now = DateTime.Now;
+            DateTime nextRun;
+
+            if (_config.DailyAtTimes.Count > 0)
+            {
+                var today = now.Date;
+                var upcoming = _config.DailyAtTimes
+                    .Select(t => today + t)
+                    .Where(t => t > now)
+                    .OrderBy(t => t)
+                    .FirstOrDefault();
+
+                nextRun = upcoming != default
+                    ? upcoming
+                    : now.Date.AddDays(1) + _config.DailyAtTimes.Min();
+            }
+            else if (_config.IntervalStart.HasValue && _config.RepeatEvery.HasValue)
+            {
+                var timeOfDay = now.TimeOfDay;
+
+                if (timeOfDay < _config.IntervalStart.Value)
+                    nextRun = now.Date + _config.IntervalStart.Value;
+                else if (timeOfDay >= _config.IntervalEnd!.Value)
+                    nextRun = now.Date.AddDays(1) + _config.IntervalStart.Value;
+                else
+                    nextRun = now + _config.RepeatEvery.Value;
+            }
+            else if (_config.RepeatEvery.HasValue)
+            {
+                nextRun = now.Add(_config.RepeatEvery.Value);
+            }
+            else
+            {
+                nextRun = now.AddSeconds(5);
+            }
+
+            while (_config.ExcludedDays?.Contains(nextRun.DayOfWeek) == true)
+            {
+                if (_config.DailyAtTimes.Count > 0)
+                {
+                    nextRun = nextRun.AddDays(1);
+                }
+                else if (_config.RepeatEvery.HasValue)
+                {
+                    nextRun = nextRun.Add(_config.RepeatEvery.Value);
+                }
+                else
+                {
+                    nextRun = nextRun.AddDays(1);
+                }
+            }
+
+            return nextRun;
         }
     }
 }

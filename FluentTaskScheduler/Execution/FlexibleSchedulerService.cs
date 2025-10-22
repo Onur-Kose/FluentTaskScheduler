@@ -32,13 +32,23 @@ namespace FluentTaskScheduler.Execution
                 {
                     if (job.NextRun == default || job.NextRun <= now)
                     {
-                        if (job.IsRunning)
+                        bool shouldRun = false;
+
+                        lock (job)
+                        {
+                            if (!job.IsRunning)
+                            {
+                                job.IsRunning = true;
+                                shouldRun = true;
+                                job.NextRun = CalculateNextRun(now, job);
+                            }
+                        }
+                        if (!shouldRun)
                         {
                             _logger.LogWarning("Job is already running: {Name}", job.Name);
                             continue;
                         }
 
-                        job.IsRunning = true;
 
                         _ = Task.Run(async () =>
                         {
@@ -53,11 +63,13 @@ namespace FluentTaskScheduler.Execution
                             }
                             finally
                             {
-                                job.IsRunning = false;
+                                lock (job)
+                                {
+                                    job.IsRunning = false;
+                                }
                             }
                         }, stoppingToken);
 
-                        job.NextRun = CalculateNextRun(now, job);
                     }
                 }
 
