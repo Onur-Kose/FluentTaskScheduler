@@ -1,3 +1,4 @@
+<pre>
 # FluentTaskScheduler
 
 A modern, task-based job scheduling library for .NET with a fluent DSL and native dependency injection support.
@@ -43,7 +44,7 @@ builder.Services.AddTransient<IMyService, MyService>();
 
 public interface IMyService
 {
-    Task StepOneAsync();
+    Task StepOneAsync(); 
     Task StepTwoAsync();
     Task SyncDailyDataAsync();
     Task GenerateReportAsync();
@@ -111,10 +112,10 @@ scheduler
 ## 📁 Folder Structure
 
 FluentTaskScheduler/ <br>
- ├─ Core/ <br>
- ├─ DSL/ <br>
- ├─ Execution/ <br>
- ├─ Extensions/ <br>
+ ├─ Core/ 
+ ├─ DSL/ 
+ ├─ Execution/ 
+ ├─ Extensions/ 
 
 ---
 
@@ -129,3 +130,5 @@ FluentTaskScheduler/ <br>
 ---
 
 License: MIT
+</pre>
+
