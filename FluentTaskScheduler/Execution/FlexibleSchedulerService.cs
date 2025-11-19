@@ -23,11 +23,12 @@ namespace FluentTaskScheduler.Execution
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("FlexibleSchedulerService started.");
+            if (_logger.IsEnabled(LogLevel.Information))
+                _logger.LogInformation("FlexibleSchedulerService started.");
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                var now = DateTime.Now;
+                var now = DateTime.UtcNow;
                 foreach (var job in _registry.GetJobs())
                 {
                     if (job.NextRun == default || job.NextRun <= now)
@@ -45,40 +46,59 @@ namespace FluentTaskScheduler.Execution
                         }
                         if (!shouldRun)
                         {
-                            _logger.LogWarning("Job is already running: {Name}", job.Name);
+                            if (_logger.IsEnabled(LogLevel.Warning))
+                                _logger.LogWarning("Job is already running: {Name}", job.Name);
                             continue;
                         }
 
 
-                        _ = Task.Run(async () =>
-                        {
-                            try
+                        ThreadPool.UnsafeQueueUserWorkItem(
+                            static async state =>
                             {
-                                await job.Action(_sp);
-                                _logger.LogInformation("Executed job: {Name}", job.Name);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Job failed: {Name}", job.Name);
-                            }
-                            finally
-                            {
-                                lock (job)
-                                {
-                                    job.IsRunning = false;
-                                }
-                            }
-                        }, stoppingToken);
+                                var (job, sp, logger, token) = ((TimedJobConfig, IServiceProvider, ILogger<FlexibleSchedulerService>, CancellationToken))state!;
+                                await ExecuteJobStatic(job, sp, logger, token);
+                            },
+                            (job, _sp, _logger, stoppingToken)
+                        );
+
 
                     }
                 }
 
                 await Task.Delay(1000, stoppingToken);
             }
-
-            _logger.LogInformation("FlexibleSchedulerService stopped.");
+            if (_logger.IsEnabled(LogLevel.Information))
+                _logger.LogInformation("FlexibleSchedulerService stopped.");
         }
+        private static async Task ExecuteJobStatic(
+            TimedJobConfig job,
+            IServiceProvider sp,
+            ILogger<FlexibleSchedulerService> logger,
+            CancellationToken token)
+        {
+            if (token.IsCancellationRequested)
+                return;
 
+            try
+            {
+                await job.Func(sp);
+
+                if (logger.IsEnabled(LogLevel.Information))
+                    logger.LogInformation("Executed job: {Name}", job.Name);
+            }
+            catch (Exception ex)
+            {
+                if (logger.IsEnabled(LogLevel.Error))
+                    logger.LogError(ex, "Job failed: {Name}", job.Name);
+            }
+            finally
+            {
+                lock (job)
+                {
+                    job.IsRunning = false;
+                }
+            }
+        }
         private static DateTime CalculateNextRun(DateTime now, TimedJobConfig job)
         {
             DateTime nextRun = now;

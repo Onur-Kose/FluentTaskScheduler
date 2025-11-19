@@ -4,6 +4,10 @@ using System.Linq.Expressions;
 
 namespace FluentTaskScheduler.DSL
 {
+    /// <summary>
+    /// Fluent DSL builder that allows defining scheduled jobs using chained syntax.
+    /// Supports DailyAt, Every, Between, exclusion days, and multi-step sequencing.
+    /// </summary>
     public class SchedulerBuilder<T> where T : notnull
     {
         private readonly IServiceProvider _serviceProvider;
@@ -11,12 +15,20 @@ namespace FluentTaskScheduler.DSL
         private TimedJobConfig _config = null!;
         private readonly List<Expression<Func<T, Task>>> _steps = [];
 
+        /// <summary>
+        /// Creates a new SchedulerBuilder instance.
+        /// </summary>
         public SchedulerBuilder(IServiceProvider serviceProvider)
         {
             _serviceProvider = serviceProvider;
             _registry = _serviceProvider.GetRequiredService<IScheduledJobRegistry>();
         }
-
+        /// <summary>
+        /// Defines the first action that will be executed by this job.
+        /// Must be called before using ThenFor, DailyAt, Every, Between, or NotRunThisDays.
+        /// </summary>
+        /// <param name="method">The async method expression to execute.</param>
+        /// <param name="name">Optional custom job name.</param>
         public SchedulerBuilder<T> For(Expression<Func<T, Task>> method, string? name = null)
         {
             _config = new TimedJobConfig();
@@ -25,28 +37,35 @@ namespace FluentTaskScheduler.DSL
             _config.Name = GetOrGenerateJobName(method, name);
             return this;
         }
-
+        /// <summary>
+        /// Adds an additional method to be executed sequentially after the previous steps.
+        /// </summary>
+        /// <param name="method">The async method expression to execute.</param>
         public SchedulerBuilder<T> ThenFor(Expression<Func<T, Task>> method)
         {
-            if (_steps.Count == 0)
-                throw new InvalidOperationException("Cannot use ThenFor(...) before calling For(...). Define the initial step first.");
+            EnsureForCalled();
+
             _steps.Add(method);
             return this;
         }
-
+        /// <summary>
+        /// Schedules the job to run every day at the specified time.
+        /// </summary>
+        /// <param name="time">Time format must be 'HH:mm' or 'HH:mm:ss'.</param>
         public SchedulerBuilder<T> DailyAt(string time)
         {
             if (!TimeSpan.TryParse(time, out var parsedTime))
                 throw new ArgumentException("Invalid time format. Expected format: 'HH:mm' or 'HH:mm:ss'.");
 
-            if (_steps.Count == 0)
-                throw new InvalidOperationException("You must define an action with For(...) before using this method.");
+            EnsureForCalled();
 
             _config.DailyAtTimes.Add(parsedTime);
             return this;
         }
-
-
+        /// <summary>
+        /// Schedules the job to run repeatedly based on the provided interval.
+        /// </summary>
+        /// <param name="interval">Minimum allowed interval is 1 second.</param>
         public SchedulerBuilder<T> Every(TimeSpan interval)
         {
             if (interval.TotalSeconds < 1)
@@ -59,12 +78,15 @@ namespace FluentTaskScheduler.DSL
             _config.RepeatEvery = interval;
             return this;
         }
-
+        /// <summary>
+        /// Defines a time window (start-end) during which repeated jobs are allowed to run.
+        /// Must be used together with Every(...).
+        /// </summary>
+        /// <param name="start">Start time in 'HH:mm' format.</param>
+        /// <param name="end">End time in 'HH:mm' format.</param>
         public SchedulerBuilder<T> Between(string start, string end)
         {
-            if (_steps.Count == 0)
-                throw new InvalidOperationException("You must define an action with For(...) before using this method.");
-
+            EnsureForCalled();
 
             if (!TimeSpan.TryParse(start, out var startTime))
                 throw new ArgumentException("Invalid start time format. Expected format: 'HH:mm' or 'HH:mm:ss'.");
@@ -80,17 +102,19 @@ namespace FluentTaskScheduler.DSL
             _config.IntervalEnd = endTime;
             return this;
         }
-
+        /// <summary>
+        /// Prevents the job from running on specified days of the week.
+        /// </summary>
         public SchedulerBuilder<T> NotRunThisDays(params DayOfWeek[] days)
         {
-            if (_steps.Count == 0)
-                throw new InvalidOperationException("You must define an action with For(...) before using this method.");
-
+            EnsureForCalled();
 
             _config.ExcludedDays = days;
             return this;
         }
-
+        /// <summary>
+        /// Finalizes the job definition and registers it with the scheduler.
+        /// </summary>
         public void Do()
         {
             if (_steps.Count == 0)
@@ -107,7 +131,7 @@ namespace FluentTaskScheduler.DSL
                 throw new InvalidOperationException(
                     "When using .Between(...), you must also specify .Every(...)");
             }
-            _config.Action = async sp =>
+            _config.Func = async sp =>
             {
                 var instance = sp.GetRequiredService<T>();
                 foreach (var expr in _steps)
@@ -121,9 +145,16 @@ namespace FluentTaskScheduler.DSL
 
             _registry.AddJob(_config);
         }
-
         /// <summary>
-        /// Verilen ismi döndürür, eğer boş ise metod adından job ismi oluşturur
+        /// Ensures For(...) was called before using configuration methods.
+        /// </summary>
+        private void EnsureForCalled()
+        {
+            if (_steps.Count == 0)
+                throw new InvalidOperationException("You must define an action using For(...) first.");
+        }
+        /// <summary>
+        /// Returns the provided name, or generates one from the method name if empty.
         /// </summary>
         private static string GetOrGenerateJobName(Expression<Func<T, Task>> method, string? name)
         {
@@ -136,7 +167,7 @@ namespace FluentTaskScheduler.DSL
         }
 
         /// <summary>
-        /// Kısa, unique ID oluşturur (6 karakter)
+        /// Generates a short unique identifier (6 characters).
         /// </summary>
         private static string GenerateShortId()
         {
@@ -159,7 +190,7 @@ namespace FluentTaskScheduler.DSL
         }
 
         /// <summary>
-        /// Expression'dan metod adını çıkarır
+        /// Extracts the method name from the expression tree.
         /// </summary>
         private static string ExtractMethodName(Expression<Func<T, Task>> expression)
         {
@@ -174,7 +205,7 @@ namespace FluentTaskScheduler.DSL
         }
 
         /// <summary>
-        /// Metod adından unique job adı oluşturur
+        /// Builds a unique job name using the service type and method name.
         /// </summary>
         private static string GenerateJobName(string methodName)
         {
@@ -188,7 +219,7 @@ namespace FluentTaskScheduler.DSL
         }
 
         /// <summary>
-        /// Başlangıç için ilk çalıştırma zamanını hesapla
+        /// Computes the very first execution time of the job based on its configuration.
         /// </summary>
         private DateTime CalculateInitialNextRun()
         {
