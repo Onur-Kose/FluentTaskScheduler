@@ -1,10 +1,9 @@
-<pre>
 # FluentTaskScheduler
 
 A modern, task-based job scheduling library for .NET with a fluent DSL and native dependency injection support.
 
-⏱️ Write readable, chainable, and intuitive task scheduling code.
-💉 Fully DI-friendly – perfect for use with `Microsoft.Extensions.DependencyInjection`.
+⏱️ Write readable, chainable, and intuitive task scheduling code.  
+💉 Fully DI-friendly – perfect for use with `Microsoft.Extensions.DependencyInjection`.  
 ⚙️ Supports interval-based, time-based, and restricted-time-range execution.
 
 ---
@@ -23,7 +22,9 @@ A modern, task-based job scheduling library for .NET with a fluent DSL and nativ
 
 ## 📦 Installation
 
+```bash
 dotnet add package FluentTaskScheduler --version 0.1.0-beta
+```
 
 ---
 
@@ -31,17 +32,20 @@ dotnet add package FluentTaskScheduler --version 0.1.0-beta
 
 ### 1. Register the Scheduler
 
-Program.cs:
+```csharp
+// Program.cs
 
 builder.Services.AddFluentTaskScheduler();
 builder.Services.AddSchedulerFor<IMyService>();
 
 builder.Services.AddTransient<IMyService, MyService>();
+```
 
 ---
 
 ### 2. Create Your Service
 
+```csharp
 public interface IMyService
 {
     Task StepOneAsync(); 
@@ -49,11 +53,13 @@ public interface IMyService
     Task SyncDailyDataAsync();
     Task GenerateReportAsync();
 }
+```
 
 ---
 
 ### 3. Configure Jobs
 
+```csharp
 var scheduler = host.Services.GetRequiredService<SchedulerBuilder<IMyService>>();
 
 scheduler
@@ -62,6 +68,7 @@ scheduler
     .Every(TimeSpan.FromMinutes(10))
     .Between("09:00", "18:00")
     .Do();
+```
 
 ---
 
@@ -69,33 +76,39 @@ scheduler
 
 ### Run a job at multiple times every day
 
+```csharp
 scheduler
     .For(x => x.SyncDailyDataAsync())
     .DailyAt("12:00")
     .DailyAt("15:00")
     .DailyAt("19:30")
     .Do();
+```
 
 ---
 
 ### Run every hour except weekends
 
+```csharp
 scheduler
     .For(x => x.GenerateReportAsync())
     .Every(TimeSpan.FromHours(1))
     .NotRunThisDays(DayOfWeek.Saturday, DayOfWeek.Sunday)
     .Do();
+```
 
 ---
 
 ### Multi-step workflow
 
+```csharp
 scheduler
     .For(x => x.InitializeAsync())
     .ThenFor(x => x.ProcessDataAsync())
     .ThenFor(x => x.CleanupAsync())
     .Every(TimeSpan.FromMinutes(5))
     .Do();
+```
 
 ---
 
@@ -111,11 +124,13 @@ scheduler
 
 ## 📁 Folder Structure
 
-FluentTaskScheduler/ <br>
- ├─ Core/ 
- ├─ DSL/ 
- ├─ Execution/ 
- ├─ Extensions/ 
+```
+FluentTaskScheduler/
+ ├─ Core/
+ ├─ DSL/
+ ├─ Execution/
+ ├─ Extensions/
+```
 
 ---
 
@@ -130,5 +145,3 @@ FluentTaskScheduler/ <br>
 ---
 
 License: MIT
-</pre>
-
