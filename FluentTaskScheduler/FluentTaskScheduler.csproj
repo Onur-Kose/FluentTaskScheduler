@@ -15,6 +15,8 @@
 		<PackageId>FluentTaskScheduler</PackageId>
 		<Version>0.1.0-beta4</Version>
 		<Authors>Onur Köse</Authors>
+		<Company>Onur Köse</Company>
+		<Product>FluentTaskScheduler</Product>
 		<Description>Fluent API-based background task scheduler for .NET</Description>
 		<PackageTags>scheduler;fluent;dotnet;DSL;background;jobs;task</PackageTags>
 		<RepositoryUrl>https://github.com/onur-kose/FluentTaskScheduler</RepositoryUrl>
