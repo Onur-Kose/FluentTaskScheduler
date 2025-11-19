@@ -110,11 +110,11 @@ scheduler
 
 ## 📁 Folder Structure
 
-FluentTaskScheduler/
- ├─ Core/
- ├─ DSL/
- ├─ Execution/
- ├─ Extensions/
+FluentTaskScheduler/ <br>
+ ├─ Core/ <br>
+ ├─ DSL/ <br>
+ ├─ Execution/ <br>
+ ├─ Extensions/ <br>
 
 ---
 
