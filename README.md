@@ -35,7 +35,7 @@ dotnet add package FluentTaskScheduler --version 0.1.0-beta4
 Define an interface and a class containing the method that you want the scheduler to run.
 
 
-```
+```c#
 public interface IMyService
 {
     Task DoWorkAsync();
@@ -56,7 +56,7 @@ public class MyService : IMyService
 In Program.cs (for .NET 6+ minimal hosting model):
 
 
-```
+```c#
 using FluentTaskScheduler.DSL;
 using FluentTaskScheduler.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -90,7 +90,7 @@ Explanation:
 After the host is built, obtain the scheduler builder and define your job.
 
 
-```
+```c#
 var scheduler = host.Services.GetRequiredService<SchedulerBuilder<IMyService>>();
 
 scheduler
@@ -112,14 +112,14 @@ Explanation:
 Finally start the host. The background service will begin running your jobs automatically.
 
 
-```
+```c#
 Console.WriteLine("Scheduler started. Press Ctrl+C to stop.");
 await host.RunAsync();
 ```
 
 When the program runs, you will see console messages every 30 seconds:
 
-```
+```c#
 [10:15:00] Job executed.
 [10:15:30] Job executed.
 ```
@@ -130,7 +130,7 @@ When the program runs, you will see console messages every 30 seconds:
 
 Run every 5 minutes:
 
-```
+```c#
 scheduler.For(x => x.DoWorkAsync())
          .Every(TimeSpan.FromMinutes(5))
          .Do();
@@ -138,7 +138,7 @@ scheduler.For(x => x.DoWorkAsync())
 
 Run daily at 08:00 and 18:00:
 
-```
+```c#
 scheduler.For(x => x.DoWorkAsync())
          .DailyAt("08:00", "18:00")
          .Do();
@@ -146,7 +146,7 @@ scheduler.For(x => x.DoWorkAsync())
 
 Run every 10 minutes only between 08:00 and 18:00:
 
-```
+```c#
 scheduler.For(x => x.DoWorkAsync())
          .Every(TimeSpan.FromMinutes(10))
          .Between(TimeSpan.FromHours(8), TimeSpan.FromHours(18))
@@ -155,7 +155,7 @@ scheduler.For(x => x.DoWorkAsync())
 
 Skip weekends:
 
-```
+```c#
 scheduler.For(x => x.DoWorkAsync())
          .Every(TimeSpan.FromHours(1))
          .NotRunThisDays(DayOfWeek.Saturday, DayOfWeek.Sunday)
