@@ -4,7 +4,7 @@
     {
         public string Name { get; set; } = string.Empty;
         public Func<IServiceProvider, Task> Func { get; set; } = default!;
-        public List<TimeSpan> DailyAtTimes { get; } = [];
+        public List<TimeSpan> DailyAtTimes { get; set; } = [];
         public TimeSpan? RepeatEvery { get; set; }
         public TimeSpan? IntervalStart { get; set; }
         public TimeSpan? IntervalEnd { get; set; }

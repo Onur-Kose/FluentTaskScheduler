@@ -160,7 +160,18 @@ namespace FluentTaskScheduler.Execution
 
             while (job.ExcludedDays?.Contains(nextRun.DayOfWeek) == true)
             {
-                nextRun = nextRun.AddDays(1);
+                if (job.DailyAtTimes.Count > 0)
+                {
+                    nextRun = nextRun.AddDays(1);
+                }
+                else if (job.RepeatEvery.HasValue)
+                {
+                    nextRun = nextRun.Add(job.RepeatEvery.Value);
+                }
+                else
+                {
+                    nextRun = nextRun.AddDays(1);
+                }
             }
             return nextRun;
         }

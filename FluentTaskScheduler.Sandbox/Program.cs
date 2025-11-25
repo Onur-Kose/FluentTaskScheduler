@@ -1,6 +1,4 @@
-﻿using FluentTaskScheduler.Core;
-using FluentTaskScheduler.DSL;
-using FluentTaskScheduler.Execution;
+using FluentTaskScheduler.Extensions;
 using FluentTaskScheduler.Sandbox;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -8,21 +6,18 @@ using Microsoft.Extensions.Hosting;
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureServices(services =>
     {
+        // 1. Register application services
         services.AddSingleton<IMyService, MyService>();
-        services.AddSingleton<IScheduledJobRegistry, ScheduledJobRegistry>();
-        services.AddHostedService<FlexibleSchedulerService>();
+        
+        // 2. Register FluentTaskScheduler infrastructure
+        services.AddFluentTaskScheduler();
+        
+        // 3. Register job configuration class
+        services.AddJobConfiguration<MyScheduledJobs>();
     })
     .Build();
 
-//Test Place ==> 
-new SchedulerBuilder<IMyService>(host.Services)
-    .For(x => x.StepOneAsync())
-    .ThenFor(x => x.StepTwoAsync())
-    .Every(TimeSpan.FromSeconds(10))
-    .Between("14:00", "14:36")
-    .Do();
-
-
-//<== Test Place
+// All jobs are now configured automatically via MyScheduledJobs class!
+// No need for manual SchedulerBuilder calls here.
 
 await host.RunAsync();

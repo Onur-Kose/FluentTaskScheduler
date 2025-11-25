@@ -69,7 +69,7 @@ namespace FluentTaskScheduler.DSL
         public SchedulerBuilder<T> Every(TimeSpan interval)
         {
             if (interval.TotalSeconds < 1)
-                throw new ArgumentException("Repeat interval must be at least 1 second. Plase change Every parameter");
+                throw new ArgumentException("Repeat interval must be at least 1 second. Please change Every parameter");
 
             if (_steps.Count == 0)
                 throw new InvalidOperationException("You must define an action with For(...) before using this method.");
@@ -185,8 +185,7 @@ namespace FluentTaskScheduler.DSL
                 randomCode[i] = chars[(int)(value % (uint)chars.Length)];
                 value /= (uint)chars.Length;
             }
-            var result = "_" + new string(randomCode);
-            return new string(result);
+            return $"_{new string(randomCode)}";
         }
 
         /// <summary>
@@ -223,7 +222,7 @@ namespace FluentTaskScheduler.DSL
         /// </summary>
         private DateTime CalculateInitialNextRun()
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             DateTime nextRun;
 
             if (_config.DailyAtTimes.Count > 0)
