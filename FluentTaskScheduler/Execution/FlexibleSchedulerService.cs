@@ -20,76 +20,72 @@ namespace FluentTaskScheduler.Execution
             _registry = _sp.GetRequiredService<IScheduledJobRegistry>();
         }
 
-
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            if (_logger.IsEnabled(LogLevel.Information))
-                _logger.LogInformation("FlexibleSchedulerService started.");
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                var now = DateTime.UtcNow;
-                foreach (var job in _registry.GetJobs())
-                {
-                    if (job.NextRun == default || job.NextRun <= now)
-                    {
-                        bool shouldRun = false;
-
-                        lock (job)
-                        {
-                            if (!job.IsRunning)
-                            {
-                                job.IsRunning = true;
-                                shouldRun = true;
-                                job.NextRun = CalculateNextRun(now, job);
-                            }
-                        }
-                        if (!shouldRun)
-                        {
-                            if (_logger.IsEnabled(LogLevel.Warning))
-                                _logger.LogWarning("Job is already running: {Name}", job.Name);
-                            continue;
-                        }
-
-
-                        ThreadPool.UnsafeQueueUserWorkItem(
-                            static async state =>
-                            {
-                                var (job, sp, logger, token) = ((TimedJobConfig, IServiceProvider, ILogger<FlexibleSchedulerService>, CancellationToken))state!;
-                                await ExecuteJobStatic(job, sp, logger, token);
-                            },
-                            (job, _sp, _logger, stoppingToken)
-                        );
-
-
-                    }
-                }
-
-                await Task.Delay(1000, stoppingToken);
-            }
-            if (_logger.IsEnabled(LogLevel.Information))
-                _logger.LogInformation("FlexibleSchedulerService stopped.");
-        }
-        private static async Task ExecuteJobStatic(
-            TimedJobConfig job,
-            IServiceProvider sp,
-            ILogger<FlexibleSchedulerService> logger,
-            CancellationToken token)
-        {
-            if (token.IsCancellationRequested)
-                return;
+            _logger.LogInformation("FlexibleSchedulerService started.");
+            var runningTasks = new List<Task>();
 
             try
             {
-                await job.Func(sp);
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    runningTasks.RemoveAll(task => task.IsCompletedSuccessfully);
+                    var now = DateTime.UtcNow;
+                    foreach (var job in _registry.GetJobs())
+                    {
+                        if (stoppingToken.IsCancellationRequested)
+                            break;
 
-                if (logger.IsEnabled(LogLevel.Information))
-                    logger.LogInformation("Executed job: {Name}", job.Name);
+                        lock (job)
+                        {
+                            if (job.IsRunning || job.NextRun > now)
+                                continue;
+
+                            // A delayed poll must still honor calendar restrictions.
+                            if (!JobSchedule.CanRunAt(job, now))
+                            {
+                                job.NextRun = JobSchedule.CalculateNextRun(job, now);
+                                continue;
+                            }
+
+                            job.NextRun = JobSchedule.CalculateNextRun(job, now);
+                            job.IsRunning = true;
+                        }
+
+                        // Retain tasks so shutdown can await their scope disposal.
+                        runningTasks.Add(Task.Run(() => ExecuteJobAsync(job, stoppingToken)));
+                    }
+
+                    await Task.Delay(1000, stoppingToken);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
+            finally
+            {
+                await Task.WhenAll(runningTasks);
+                _logger.LogInformation("FlexibleSchedulerService stopped.");
+            }
+        }
+
+        private async Task ExecuteJobAsync(TimedJobConfig job, CancellationToken token)
+        {
+            try
+            {
+                if (token.IsCancellationRequested)
+                    return;
+
+                await using var scope = _sp.CreateAsyncScope();
+                await job.Func(scope.ServiceProvider);
+                _logger.LogInformation("Executed job: {Name}", job.Name);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
             }
             catch (Exception ex)
             {
-                if (logger.IsEnabled(LogLevel.Error))
-                    logger.LogError(ex, "Job failed: {Name}", job.Name);
+                _logger.LogError(ex, "Job failed: {Name}", job.Name);
             }
             finally
             {
@@ -98,82 +94,6 @@ namespace FluentTaskScheduler.Execution
                     job.IsRunning = false;
                 }
             }
-        }
-        private static DateTime CalculateNextRun(DateTime now, TimedJobConfig job)
-        {
-            DateTime nextRun = now;
-
-            if (job.DailyAtTimes is { Count: > 0 })
-            {
-                var today = now.Date;
-
-                var upcomingToday = job.DailyAtTimes
-                    .Select(t => today + t)
-                    .Where(t => t > now)
-                    .OrderBy(t => t)
-                    .FirstOrDefault();
-
-                if (upcomingToday != default)
-                {
-                    nextRun = upcomingToday;
-                }
-                else
-                {
-
-                    var tomorrow = now.Date.AddDays(1);
-                    nextRun = tomorrow + job.DailyAtTimes.Min();
-                }
-            }
-
-            else if (job.IntervalStart.HasValue && job.IntervalEnd.HasValue && job.RepeatEvery.HasValue)
-            {
-                var timeOfDay = now.TimeOfDay;
-
-                if (timeOfDay < job.IntervalStart.Value)
-                    nextRun = now.Date + job.IntervalStart.Value;
-
-                else if (timeOfDay >= job.IntervalEnd.Value)
-                    nextRun = now.Date + TimeSpan.FromDays(1) + job.IntervalStart.Value;
-
-                else
-                {
-                    var tentativeNext = now + job.RepeatEvery.Value;
-                    if (tentativeNext.TimeOfDay >= job.IntervalEnd.Value)
-                    {
-                        nextRun = now.Date.AddDays(1) + job.IntervalStart.Value;
-                    }
-                    else
-                    {
-                        nextRun = tentativeNext;
-                    }
-                }
-            }
-
-            else if (job.RepeatEvery.HasValue)
-            {
-                nextRun = now + job.RepeatEvery.Value;
-            }
-            else
-            {
-                nextRun = now.AddDays(1);
-            }
-
-            while (job.ExcludedDays?.Contains(nextRun.DayOfWeek) == true)
-            {
-                if (job.DailyAtTimes.Count > 0)
-                {
-                    nextRun = nextRun.AddDays(1);
-                }
-                else if (job.RepeatEvery.HasValue)
-                {
-                    nextRun = nextRun.Add(job.RepeatEvery.Value);
-                }
-                else
-                {
-                    nextRun = nextRun.AddDays(1);
-                }
-            }
-            return nextRun;
         }
     }
 }

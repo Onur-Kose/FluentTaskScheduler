@@ -7,12 +7,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FluentTaskScheduler", "Flue
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FluentTaskScheduler.Sandbox", "FluentTaskScheduler.Sandbox\FluentTaskScheduler.Sandbox.csproj", "{D21B4480-BE41-4E75-BA96-F903EDF9E3E9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FluentTaskScheduler.Tests", "FluentTaskScheduler.Tests\FluentTaskScheduler.Tests.csproj", "{C87786EC-A787-47F7-A913-39FD7F584C3F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C87786EC-A787-47F7-A913-39FD7F584C3F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C87786EC-A787-47F7-A913-39FD7F584C3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C87786EC-A787-47F7-A913-39FD7F584C3F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C87786EC-A787-47F7-A913-39FD7F584C3F}.Release|Any CPU.Build.0 = Release|Any CPU
 		{DA4B84F8-AD7C-4711-A284-BFE636B3B345}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{DA4B84F8-AD7C-4711-A284-BFE636B3B345}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DA4B84F8-AD7C-4711-A284-BFE636B3B345}.Release|Any CPU.ActiveCfg = Release|Any CPU

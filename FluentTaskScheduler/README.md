@@ -12,7 +12,7 @@ FluentTaskScheduler is a lightweight and fluent-style job scheduling library for
 * Supports interval-based or specific-time execution
 * Supports excluded days and time ranges
 * Exception-safe execution and logging
-* No external dependencies
+* Uses Microsoft.Extensions hosting and dependency injection
 
 ---
 
@@ -21,7 +21,7 @@ FluentTaskScheduler is a lightweight and fluent-style job scheduling library for
 Install from NuGet:
 
 ```
-dotnet add package FluentTaskScheduler --version 0.1.0-beta4
+dotnet add package FluentTaskScheduler --version 0.1.0
 ```
 
 ---
@@ -53,7 +53,7 @@ public class MyService : IMyService
 
 ## 2. REGISTER THE SCHEDULER AND YOUR SERVICE
 
-In Program.cs (for .NET 6+ minimal hosting model):
+In Program.cs (targeting .NET 10):
 
 
 ```c#
@@ -180,10 +180,15 @@ scheduler.For(x => x.DoWorkAsync())
 ## TECHNICAL NOTES
 
 * The background executor (FlexibleSchedulerService) checks registered jobs every second.
-* Jobs are executed on a ThreadPool thread (fire-and-forget).
+* Jobs run as tracked tasks, each with its own dependency injection scope.
+* Daily times, time windows, and excluded weekdays use UTC.
+* Time windows include the start and exclude the end; overnight windows are not supported.
+* An interval that lands on an excluded day moves to the next allowed day, at midnight or the window start.
 * Each job keeps track of its own next execution time (NextRun).
 * Only one instance of each job runs at a time (no overlapping).
 * If both .Every(...) and .DailyAt(...) are used together, an exception is thrown.
+* A job must specify either .Every(...) or .DailyAt(...). Intervals must be at least one second.
+* .Do() completes a definition; call .For(...) again before configuring another job with the same builder.
 * Excluding all seven days also throws an exception to prevent silent never-runs.
 
 ---
@@ -192,7 +197,7 @@ scheduler.For(x => x.DoWorkAsync())
 
 * Dependency Injection: Jobs can use any registered service type — transient, scoped, or singleton.
 * Error Handling: Exceptions during execution are caught and logged via ILogger<FlexibleSchedulerService>.
-* Graceful Shutdown: The host’s cancellation token is passed down; the service will stop cleanly on Ctrl+C.
+* Graceful Shutdown: The scheduler stops dispatching new jobs and waits for active jobs, subject to the host shutdown timeout. Job methods do not receive a cancellation token automatically.
 * AOT / Native Compilation: The library uses Expression.Compile() which may require trimming configuration for AOT builds.
 
 ---

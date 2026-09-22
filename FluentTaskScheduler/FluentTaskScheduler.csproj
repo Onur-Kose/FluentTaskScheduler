@@ -13,7 +13,7 @@
 
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<PackageId>FluentTaskScheduler</PackageId>
-		<Version>0.1.0-beta4</Version>
+		<Version>0.1.0</Version>
 		<Authors>Onur Köse</Authors>
 		<Description>Fluent API-based background task scheduler for .NET</Description>
 		<PackageTags>scheduler;fluent;dotnet;DSL;background;jobs;task</PackageTags>
@@ -24,6 +24,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<None Update="README.md" Pack="true" PackagePath="\" />
+		<InternalsVisibleTo Include="FluentTaskScheduler.Tests" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
 	</ItemGroup>

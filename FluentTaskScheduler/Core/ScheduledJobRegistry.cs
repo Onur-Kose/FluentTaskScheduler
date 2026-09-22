@@ -9,21 +9,23 @@ namespace FluentTaskScheduler.Core
         private readonly object _cacheLock = new();
         public void AddJob(TimedJobConfig config)
         {
-            _jobs.Enqueue(config);
+            ArgumentNullException.ThrowIfNull(config);
             lock (_cacheLock)
             {
+                _jobs.Enqueue(config);
                 _cachedJobs = null;
             }
         }
 
         public IReadOnlyList<TimedJobConfig> GetJobs()
         {
-            if (_cachedJobs is not null)
-                return _cachedJobs;
+            var cachedJobs = _cachedJobs;
+            if (cachedJobs is not null)
+                return cachedJobs;
 
             lock (_cacheLock)
             {
-                _cachedJobs ??= [.. _jobs];
+                _cachedJobs ??= Array.AsReadOnly(_jobs.ToArray());
                 return _cachedJobs;
             }
         }

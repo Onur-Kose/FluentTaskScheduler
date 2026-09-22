@@ -1,5 +1,6 @@
 ﻿using FluentTaskScheduler.Core;
 using Microsoft.Extensions.DependencyInjection;
+using System.Globalization;
 using System.Linq.Expressions;
 
 namespace FluentTaskScheduler.DSL
@@ -31,6 +32,7 @@ namespace FluentTaskScheduler.DSL
         /// <param name="name">Optional custom job name.</param>
         public SchedulerBuilder<T> For(Expression<Func<T, Task>> method, string? name = null)
         {
+            ArgumentNullException.ThrowIfNull(method);
             _config = new TimedJobConfig();
             _steps.Clear();
             _steps.Add(method);
@@ -44,7 +46,7 @@ namespace FluentTaskScheduler.DSL
         public SchedulerBuilder<T> ThenFor(Expression<Func<T, Task>> method)
         {
             EnsureForCalled();
-
+            ArgumentNullException.ThrowIfNull(method);
             _steps.Add(method);
             return this;
         }
@@ -54,12 +56,20 @@ namespace FluentTaskScheduler.DSL
         /// <param name="time">Time format must be 'HH:mm' or 'HH:mm:ss'.</param>
         public SchedulerBuilder<T> DailyAt(string time)
         {
-            if (!TimeSpan.TryParse(time, out var parsedTime))
-                throw new ArgumentException("Invalid time format. Expected format: 'HH:mm' or 'HH:mm:ss'.");
-
             EnsureForCalled();
+            _config.DailyAtTimes.Add(ParseTime(time, nameof(time)));
+            return this;
+        }
 
-            _config.DailyAtTimes.Add(parsedTime);
+        public SchedulerBuilder<T> DailyAt(params string[] times)
+        {
+            EnsureForCalled();
+            ArgumentNullException.ThrowIfNull(times);
+            if (times.Length == 0)
+                throw new ArgumentException("Specify at least one daily time.", nameof(times));
+
+            var parsedTimes = times.Select(time => ParseTime(time, nameof(times))).ToArray();
+            _config.DailyAtTimes.AddRange(parsedTimes);
             return this;
         }
         /// <summary>
@@ -87,19 +97,21 @@ namespace FluentTaskScheduler.DSL
         public SchedulerBuilder<T> Between(string start, string end)
         {
             EnsureForCalled();
+            return Between(ParseTime(start, nameof(start)), ParseTime(end, nameof(end)));
+        }
 
-            if (!TimeSpan.TryParse(start, out var startTime))
-                throw new ArgumentException("Invalid start time format. Expected format: 'HH:mm' or 'HH:mm:ss'.");
-
-            if (!TimeSpan.TryParse(end, out var endTime))
-                throw new ArgumentException("Invalid end time format. Expected format: 'HH:mm' or 'HH:mm:ss'.");
-
-
-            if (startTime >= endTime)
+        public SchedulerBuilder<T> Between(TimeSpan start, TimeSpan end)
+        {
+            EnsureForCalled();
+            if (start < TimeSpan.Zero || start >= TimeSpan.FromDays(1))
+                throw new ArgumentOutOfRangeException(nameof(start));
+            if (end < TimeSpan.Zero || end >= TimeSpan.FromDays(1))
+                throw new ArgumentOutOfRangeException(nameof(end));
+            if (start >= end)
                 throw new ArgumentException("Start time must be earlier than end time.");
 
-            _config.IntervalStart = startTime;
-            _config.IntervalEnd = endTime;
+            _config.IntervalStart = start;
+            _config.IntervalEnd = end;
             return this;
         }
         /// <summary>
@@ -108,8 +120,10 @@ namespace FluentTaskScheduler.DSL
         public SchedulerBuilder<T> NotRunThisDays(params DayOfWeek[] days)
         {
             EnsureForCalled();
-
-            _config.ExcludedDays = days;
+            ArgumentNullException.ThrowIfNull(days);
+            if (days.Any(day => !Enum.IsDefined(day)))
+                throw new ArgumentException("Invalid day of the week.", nameof(days));
+            _config.ExcludedDays = days.Distinct().ToArray();
             return this;
         }
         /// <summary>
@@ -123,6 +137,9 @@ namespace FluentTaskScheduler.DSL
             if (_config.DailyAtTimes.Count != 0 && _config.RepeatEvery.HasValue)
                 throw new InvalidOperationException("You cannot use both .DailyAt(...) and .Every(...). These options are mutually exclusive.");
 
+            if (_config.DailyAtTimes.Count == 0 && !_config.RepeatEvery.HasValue)
+                throw new InvalidOperationException("Specify either Every(...) or DailyAt(...).");
+
             if (_config.ExcludedDays?.Length == 7)
                 throw new InvalidOperationException("All days are excluded. The job would never run. Change NotRunThisDays");
 
@@ -131,19 +148,21 @@ namespace FluentTaskScheduler.DSL
                 throw new InvalidOperationException(
                     "When using .Between(...), you must also specify .Every(...)");
             }
+            var steps = _steps.Select(expression => expression.Compile()).ToArray();
             _config.Func = async sp =>
             {
                 var instance = sp.GetRequiredService<T>();
-                foreach (var expr in _steps)
+                foreach (var step in steps)
                 {
-                    var func = expr.Compile();
-                    await func(instance);
+                    await step(instance);
                 }
             };
 
-            _config.NextRun = CalculateInitialNextRun();
+            _config.NextRun = JobSchedule.CalculateNextRun(_config, DateTime.UtcNow);
 
             _registry.AddJob(_config);
+            _steps.Clear();
+            _config = null!;
         }
         /// <summary>
         /// Ensures For(...) was called before using configuration methods.
@@ -217,64 +236,13 @@ namespace FluentTaskScheduler.DSL
             return $"{serviceTypeName}_{methodName}_{shortId}";
         }
 
-        /// <summary>
-        /// Computes the very first execution time of the job based on its configuration.
-        /// </summary>
-        private DateTime CalculateInitialNextRun()
+        private static TimeSpan ParseTime(string value, string parameterName)
         {
-            var now = DateTime.UtcNow;
-            DateTime nextRun;
-
-            if (_config.DailyAtTimes.Count > 0)
-            {
-                var today = now.Date;
-                var upcoming = _config.DailyAtTimes
-                    .Select(t => today + t)
-                    .Where(t => t > now)
-                    .OrderBy(t => t)
-                    .FirstOrDefault();
-
-                nextRun = upcoming != default
-                    ? upcoming
-                    : now.Date.AddDays(1) + _config.DailyAtTimes.Min();
-            }
-            else if (_config.IntervalStart.HasValue && _config.RepeatEvery.HasValue)
-            {
-                var timeOfDay = now.TimeOfDay;
-
-                if (timeOfDay < _config.IntervalStart.Value)
-                    nextRun = now.Date + _config.IntervalStart.Value;
-                else if (timeOfDay >= _config.IntervalEnd!.Value)
-                    nextRun = now.Date.AddDays(1) + _config.IntervalStart.Value;
-                else
-                    nextRun = now + _config.RepeatEvery.Value;
-            }
-            else if (_config.RepeatEvery.HasValue)
-            {
-                nextRun = now.Add(_config.RepeatEvery.Value);
-            }
-            else
-            {
-                nextRun = now.AddSeconds(5);
-            }
-
-            while (_config.ExcludedDays?.Contains(nextRun.DayOfWeek) == true)
-            {
-                if (_config.DailyAtTimes.Count > 0)
-                {
-                    nextRun = nextRun.AddDays(1);
-                }
-                else if (_config.RepeatEvery.HasValue)
-                {
-                    nextRun = nextRun.Add(_config.RepeatEvery.Value);
-                }
-                else
-                {
-                    nextRun = nextRun.AddDays(1);
-                }
-            }
-
-            return nextRun;
+            if (!TimeSpan.TryParseExact(value, [@"hh\:mm", @"hh\:mm\:ss"],
+                CultureInfo.InvariantCulture, out var time) ||
+                time < TimeSpan.Zero || time >= TimeSpan.FromDays(1))
+                throw new ArgumentException("Invalid time format. Expected 'HH:mm' or 'HH:mm:ss' within a single day.", parameterName);
+            return time;
         }
     }
 }

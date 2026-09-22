@@ -2,6 +2,7 @@
 using FluentTaskScheduler.DSL;
 using FluentTaskScheduler.Execution;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace FluentTaskScheduler.Extensions
@@ -19,7 +20,7 @@ namespace FluentTaskScheduler.Extensions
         /// <param name="services">The IServiceCollection to extend.</param>
         public static IServiceCollection AddFluentTaskScheduler(this IServiceCollection services)
         {
-            services.AddSingleton<IScheduledJobRegistry, ScheduledJobRegistry>();
+            services.TryAddSingleton<IScheduledJobRegistry, ScheduledJobRegistry>();
             services.AddHostedService<FlexibleSchedulerService>();
 
             return services;
