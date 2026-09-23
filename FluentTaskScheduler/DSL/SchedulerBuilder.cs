@@ -14,7 +14,7 @@ namespace FluentTaskScheduler.DSL
         private readonly IServiceProvider _serviceProvider;
         private readonly IScheduledJobRegistry _registry;
         private TimedJobConfig _config = null!;
-        private readonly List<Expression<Func<T, Task>>> _steps = [];
+        private readonly List<Expression<Func<T, CancellationToken, Task>>> _steps = [];
 
         /// <summary>
         /// Creates a new SchedulerBuilder instance.
@@ -33,6 +33,12 @@ namespace FluentTaskScheduler.DSL
         public SchedulerBuilder<T> For(Expression<Func<T, Task>> method, string? name = null)
         {
             ArgumentNullException.ThrowIfNull(method);
+            return For(WithToken(method), name);
+        }
+
+        public SchedulerBuilder<T> For(Expression<Func<T, CancellationToken, Task>> method, string? name = null)
+        {
+            ArgumentNullException.ThrowIfNull(method);
             _config = new TimedJobConfig();
             _steps.Clear();
             _steps.Add(method);
@@ -44,6 +50,12 @@ namespace FluentTaskScheduler.DSL
         /// </summary>
         /// <param name="method">The async method expression to execute.</param>
         public SchedulerBuilder<T> ThenFor(Expression<Func<T, Task>> method)
+        {
+            ArgumentNullException.ThrowIfNull(method);
+            return ThenFor(WithToken(method));
+        }
+
+        public SchedulerBuilder<T> ThenFor(Expression<Func<T, CancellationToken, Task>> method)
         {
             EnsureForCalled();
             ArgumentNullException.ThrowIfNull(method);
@@ -149,14 +161,21 @@ namespace FluentTaskScheduler.DSL
                     "When using .Between(...), you must also specify .Every(...)");
             }
             var steps = _steps.Select(expression => expression.Compile()).ToArray();
-            _config.Func = async sp =>
+            async Task ExecuteSteps(IServiceProvider sp, CancellationToken token)
             {
+                token.ThrowIfCancellationRequested();
                 var instance = sp.GetRequiredService<T>();
                 foreach (var step in steps)
                 {
-                    await step(instance);
+                    token.ThrowIfCancellationRequested();
+                    await step(instance, token);
                 }
-            };
+                token.ThrowIfCancellationRequested();
+            }
+            _config.Func = sp => ExecuteSteps(sp, CancellationToken.None);
+            _config.CancellableFunc = ExecuteSteps;
+
+            JobValidation.Validate(_config);
 
             _config.NextRun = JobSchedule.CalculateNextRun(_config, DateTime.UtcNow);
 
@@ -175,7 +194,7 @@ namespace FluentTaskScheduler.DSL
         /// <summary>
         /// Returns the provided name, or generates one from the method name if empty.
         /// </summary>
-        private static string GetOrGenerateJobName(Expression<Func<T, Task>> method, string? name)
+        private static string GetOrGenerateJobName(LambdaExpression method, string? name)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -210,7 +229,7 @@ namespace FluentTaskScheduler.DSL
         /// <summary>
         /// Extracts the method name from the expression tree.
         /// </summary>
-        private static string ExtractMethodName(Expression<Func<T, Task>> expression)
+        private static string ExtractMethodName(LambdaExpression expression)
         {
             return expression.Body switch
             {
@@ -244,5 +263,31 @@ namespace FluentTaskScheduler.DSL
                 throw new ArgumentException("Invalid time format. Expected 'HH:mm' or 'HH:mm:ss' within a single day.", parameterName);
             return time;
         }
+
+        public SchedulerBuilder<T> WithKey(string key)
+        {
+            EnsureForCalled();
+            ArgumentException.ThrowIfNullOrWhiteSpace(key);
+            _config.Key = key;
+            return this;
+        }
+
+        public SchedulerBuilder<T> WithTimeout(TimeSpan timeout)
+        {
+            EnsureForCalled();
+            _config.Timeout = timeout;
+            return this;
+        }
+
+        public SchedulerBuilder<T> WithRetry(RetryPolicy policy)
+        {
+            EnsureForCalled();
+            _config.Retry = policy;
+            return this;
+        }
+
+        private static Expression<Func<T, CancellationToken, Task>> WithToken(Expression<Func<T, Task>> method) =>
+            Expression.Lambda<Func<T, CancellationToken, Task>>(method.Body, method.Parameters[0],
+                Expression.Parameter(typeof(CancellationToken), "cancellationToken"));
     }
 }

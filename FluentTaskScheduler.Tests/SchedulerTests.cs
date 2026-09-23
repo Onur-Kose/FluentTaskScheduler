@@ -172,7 +172,11 @@ public class SchedulerTests
         {
             for (var i = 0; i < 1000; i++)
             {
-                registry.AddJob(new TimedJobConfig());
+                registry.AddJob(new TimedJobConfig
+                {
+                    RepeatEvery = TimeSpan.FromSeconds(1),
+                    Func = _ => Task.CompletedTask
+                });
                 Assert.NotNull(registry.GetJobs());
             }
         })));

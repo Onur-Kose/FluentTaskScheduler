@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using FluentTaskScheduler.Core;
 using FluentTaskScheduler.Execution;
+using FluentTaskScheduler.Extensions;
+using FluentTaskScheduler.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -91,10 +93,12 @@ public class SchedulerWakeUpTests
         await scheduler.StartAsync(default);
         try
         {
-            var error = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => scheduler.ExecuteTask!.WaitAsync(TestTimeout));
-            Assert.Equal("Snapshot failed.", error.Message);
-            Assert.True(Assert.Single(registry.Waits).Task.IsCanceled);
+            await registry.SecondWait.Task.WaitAsync(TestTimeout);
+            Assert.True(registry.Waits.First().Task.IsCanceled);
+            Assert.False(scheduler.ExecuteTask!.IsCompleted);
+            var ran = NewSignal();
+            registry.AddJob(NewJob(ran));
+            await ran.Task.WaitAsync(TestTimeout);
         }
         finally { await scheduler.StopAsync(default).WaitAsync(TestTimeout); }
     }
@@ -169,14 +173,18 @@ public class SchedulerWakeUpTests
     [Fact]
     public async Task ChangeWaitFailureIsObserved()
     {
-        await using var provider = CreateProvider(new FailingRegistry());
+        var registry = new FailingRegistry();
+        await using var provider = CreateProvider(registry);
         using var scheduler = CreateScheduler(provider);
         await scheduler.StartAsync(default);
         try
         {
-            var error = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => scheduler.ExecuteTask!.WaitAsync(TestTimeout));
-            Assert.Equal("Change wait failed.", error.Message);
+            await registry.Recovered.Task.WaitAsync(TestTimeout);
+            Assert.False(scheduler.ExecuteTask!.IsCompleted);
+            var ran = NewSignal();
+            registry.AddJob(NewJob(ran));
+            await ran.Task.WaitAsync(TestTimeout);
+            Assert.Null(provider.GetRequiredService<SchedulerDiagnostics>().GetStatus().Error);
         }
         finally { await scheduler.StopAsync(default).WaitAsync(TestTimeout); }
     }
@@ -191,7 +199,9 @@ public class SchedulerWakeUpTests
     };
 
     private static ServiceProvider CreateProvider(IScheduledJobRegistry registry) =>
-        new ServiceCollection().AddSingleton(registry).BuildServiceProvider();
+        new ServiceCollection().AddSingleton(registry)
+            .AddFluentTaskScheduler(options => options.InfrastructureRetryDelay = TimeSpan.FromMilliseconds(50))
+            .BuildServiceProvider();
 
     private static FlexibleSchedulerService CreateScheduler(IServiceProvider provider) =>
         new(provider, NullLogger<FlexibleSchedulerService>.Instance);
@@ -225,11 +235,13 @@ public class SchedulerWakeUpTests
     {
         public ConcurrentQueue<(Task Task, CancellationToken Token)> Waits { get; } = new();
         public TaskCompletionSource FourthWait { get; } = NewSignal();
+        public TaskCompletionSource SecondWait { get; } = NewSignal();
 
         public Task WaitForChangeAsync(CancellationToken cancellationToken)
         {
             var task = Inner.WaitForChangeAsync(cancellationToken);
             Waits.Enqueue((task, cancellationToken));
+            if (Waits.Count == 2) SecondWait.TrySetResult();
             if (Waits.Count == 4)
                 FourthWait.TrySetResult();
             return task;
@@ -238,7 +250,14 @@ public class SchedulerWakeUpTests
 
     private sealed class FailingRegistry : SnapshotRegistry, IScheduledJobRegistry
     {
-        public Task WaitForChangeAsync(CancellationToken cancellationToken) =>
-            Task.FromException(new InvalidOperationException("Change wait failed."));
+        private int _calls;
+        public TaskCompletionSource Recovered { get; } = NewSignal();
+        public Task WaitForChangeAsync(CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref _calls) == 1)
+                return Task.FromException(new InvalidOperationException("Change wait failed."));
+            Recovered.TrySetResult();
+            return Inner.WaitForChangeAsync(cancellationToken);
+        }
     }
 }

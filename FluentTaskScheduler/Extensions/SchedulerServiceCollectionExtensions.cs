@@ -1,6 +1,8 @@
 ﻿using FluentTaskScheduler.Core;
 using FluentTaskScheduler.DSL;
 using FluentTaskScheduler.Execution;
+using FluentTaskScheduler.Diagnostics;
+using FluentTaskScheduler.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -18,11 +20,24 @@ namespace FluentTaskScheduler.Extensions
         /// - FlexibleSchedulerService (hosted background service)
         /// </summary>
         /// <param name="services">The IServiceCollection to extend.</param>
-        public static IServiceCollection AddFluentTaskScheduler(this IServiceCollection services)
+        public static IServiceCollection AddFluentTaskScheduler(this IServiceCollection services, Action<SchedulerOptions>? configure = null)
         {
+            services.AddOptions<SchedulerOptions>();
+            if (configure is not null) services.Configure(configure);
             services.TryAddSingleton<IScheduledJobRegistry, ScheduledJobRegistry>();
+            services.TryAddSingleton<IJobStateStore, MemoryJobStateStore>();
+            services.TryAddSingleton<SchedulerDiagnostics>();
+            services.TryAddScoped<JobExecutionContext>();
             services.AddHostedService<FlexibleSchedulerService>();
 
+            return services;
+        }
+
+        /// <summary>Uses a shared directory for durable state and exclusive execution across processes.</summary>
+        public static IServiceCollection AddFileJobStateStore(this IServiceCollection services, string directory)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+            services.Replace(ServiceDescriptor.Singleton<IJobStateStore>(_ => new FileJobStateStore(directory)));
             return services;
         }
 

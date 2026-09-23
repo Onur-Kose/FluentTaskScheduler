@@ -39,5 +39,10 @@ namespace FluentTaskScheduler.Core
             return new SchedulerBuilder<T>(_serviceProvider)
                 .For(method, name);
         }
+
+        protected SchedulerBuilder<T> For<T>(
+            Expression<Func<T, CancellationToken, Task>> method,
+            string? name = null) where T : notnull =>
+            new SchedulerBuilder<T>(_serviceProvider).For(method, name);
     }
 }

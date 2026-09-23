@@ -1,0 +1,45 @@
+name: Validate scheduler
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: windows-latest
+            rid: win-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore and audit direct and transitive dependencies
+        run: dotnet restore FluentRunly.sln -p:NuGetAudit=true -p:NuGetAuditMode=all -p:TreatWarningsAsErrors=true
+      - name: Release build
+        run: dotnet build FluentRunly.sln -c Release --no-restore -p:TreatWarningsAsErrors=true
+      - name: Unit, integration, and cross-process tests
+        run: dotnet test FluentRunly.sln -c Release --no-build --no-restore --logger trx
+      - name: Create NuGet package
+        run: dotnet pack FluentTaskScheduler/FluentTaskScheduler.csproj -c Release --no-build --no-restore -o artifacts/packages
+      - name: Verify package contents
+        shell: pwsh
+        run: ./build/Verify-Package.ps1
+      - name: Publish Native AOT smoke app
+        run: dotnet publish FluentTaskScheduler.AotSmoke/FluentTaskScheduler.AotSmoke.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true -p:TreatWarningsAsErrors=true -o artifacts/aot-smoke
+      - name: Execute Native AOT smoke app
+        shell: pwsh
+        run: |
+          $binary = if ($IsWindows) { './artifacts/aot-smoke/FluentTaskScheduler.AotSmoke.exe' } else { './artifacts/aot-smoke/FluentTaskScheduler.AotSmoke' }
+          & $binary smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

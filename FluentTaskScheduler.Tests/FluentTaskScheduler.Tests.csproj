@@ -11,5 +11,6 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" PrivateAssets="all" />
     <ProjectReference Include="../FluentTaskScheduler/FluentTaskScheduler.csproj" />
+    <ProjectReference Include="../FluentTaskScheduler.AotSmoke/FluentTaskScheduler.AotSmoke.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

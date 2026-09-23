@@ -10,7 +10,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IMyService, MyService>();
         
         // 2. Register FluentTaskScheduler infrastructure
-        services.AddFluentTaskScheduler();
+        services.AddFluentTaskScheduler(options => options.MaxConcurrency = 2)
+            .AddFileJobStateStore(Path.Combine(AppContext.BaseDirectory, "scheduler-state"));
         
         // 3. Register job configuration class
         services.AddJobConfiguration<MyScheduledJobs>();

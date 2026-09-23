@@ -12,17 +12,20 @@ namespace FluentTaskScheduler.Sandbox
         {
             // Job 1: Sequential task execution every 10 seconds
             For<IMyService>(x => x.StepOneAsync())
+                .WithKey("sample.sequence")
                 .ThenFor(x => x.StepTwoAsync())
                 .Every(TimeSpan.FromSeconds(10))
                 .Do();
 
             // Job 2: Single task every 15 seconds (with custom name)
             For<IMyService>(x => x.StepOneAsync(), "CustomNamedJob")
+                .WithKey("sample.single")
                 .Every(TimeSpan.FromSeconds(15))
                 .Do();
 
             // Job 3: Daily task at specific time
             For<IMyService>(x => x.StepTwoAsync())
+                .WithKey("sample.daily")
                 .DailyAt("09:00")
                 .Do();
         }
