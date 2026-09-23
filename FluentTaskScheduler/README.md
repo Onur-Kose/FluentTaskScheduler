@@ -179,7 +179,7 @@ scheduler.For(x => x.DoWorkAsync())
 
 ## TECHNICAL NOTES
 
-* The background executor (FlexibleSchedulerService) sleeps until the next job's due time instead of polling on a fixed interval, waking early whenever a job is added. This scales to large numbers of jobs without extra CPU overhead.
+* The background executor (FlexibleSchedulerService) wakes only for a job's due time, a job completion, or a registry change. It does not poll while idle or while a job is still running. Every registry, including custom implementations, must implement `WaitForChangeAsync` to signal additions and honor cancellation; there is no polling fallback.
 * Jobs run as tracked tasks, each with its own dependency injection scope.
 * Daily times, time windows, and excluded weekdays use UTC.
 * Time windows include the start and exclude the end; overnight windows are not supported.
