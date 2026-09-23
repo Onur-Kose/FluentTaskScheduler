@@ -179,7 +179,7 @@ scheduler.For(x => x.DoWorkAsync())
 
 ## TECHNICAL NOTES
 
-* The background executor (FlexibleSchedulerService) checks registered jobs every second.
+* The background executor (FlexibleSchedulerService) sleeps until the next job's due time instead of polling on a fixed interval, waking early whenever a job is added. This scales to large numbers of jobs without extra CPU overhead.
 * Jobs run as tracked tasks, each with its own dependency injection scope.
 * Daily times, time windows, and excluded weekdays use UTC.
 * Time windows include the start and exclude the end; overnight windows are not supported.
@@ -198,7 +198,7 @@ scheduler.For(x => x.DoWorkAsync())
 * Dependency Injection: Jobs can use any registered service type — transient, scoped, or singleton.
 * Error Handling: Exceptions during execution are caught and logged via ILogger<FlexibleSchedulerService>.
 * Graceful Shutdown: The scheduler stops dispatching new jobs and waits for active jobs, subject to the host shutdown timeout. Job methods do not receive a cancellation token automatically.
-* AOT / Native Compilation: The library uses Expression.Compile() which may require trimming configuration for AOT builds.
+* AOT / Native Compilation: The library targets `IsAotCompatible` and ships with no AOT/trim analyzer warnings. It uses `Expression.Compile()` internally; under Native AOT (no dynamic code generation) this transparently falls back to the built-in expression interpreter instead of failing, so jobs still run correctly — compiled delegates may just be marginally slower to invoke than fully JIT'd ones.
 
 ---
 

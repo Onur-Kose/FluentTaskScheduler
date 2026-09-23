@@ -7,6 +7,14 @@ namespace FluentTaskScheduler.Execution
 {
     public class FlexibleSchedulerService : BackgroundService
     {
+        // Floor: prevents a busy-loop when a job overruns its own interval while
+        // still IsRunning (its NextRun is in the past, but it can't be re-dispatched yet).
+        private static readonly TimeSpan MinWait = TimeSpan.FromMilliseconds(200);
+
+        // Ceiling: used when no jobs are registered, and as a defensive periodic
+        // re-check even though job changes are also signaled explicitly.
+        private static readonly TimeSpan MaxIdleWait = TimeSpan.FromMinutes(5);
+
         private readonly IServiceProvider _sp;
         private readonly ILogger<FlexibleSchedulerService> _logger;
         private readonly IScheduledJobRegistry _registry;
@@ -29,34 +37,54 @@ namespace FluentTaskScheduler.Execution
             {
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    runningTasks.RemoveAll(task => task.IsCompletedSuccessfully);
+                    runningTasks.RemoveAll(task => task.IsCompleted);
                     var now = DateTime.UtcNow;
+                    DateTime? nextWakeUp = null;
+
                     foreach (var job in _registry.GetJobs())
                     {
                         if (stoppingToken.IsCancellationRequested)
                             break;
 
+                        DateTime jobNextRun;
                         lock (job)
                         {
                             if (job.IsRunning || job.NextRun > now)
-                                continue;
-
-                            // A delayed poll must still honor calendar restrictions.
-                            if (!JobSchedule.CanRunAt(job, now))
+                            {
+                                // Include running jobs too: their NextRun was already advanced
+                                // to the next future occurrence before they started, so skipping
+                                // them here would cause the scheduler to oversleep past it.
+                                jobNextRun = job.NextRun;
+                            }
+                            else if (!JobSchedule.CanRunAt(job, now))
+                            {
+                                // A delayed wake-up must still honor calendar restrictions.
+                                jobNextRun = job.NextRun = JobSchedule.CalculateNextRun(job, now);
+                            }
+                            else
                             {
                                 job.NextRun = JobSchedule.CalculateNextRun(job, now);
-                                continue;
-                            }
+                                job.IsRunning = true;
+                                jobNextRun = job.NextRun;
 
-                            job.NextRun = JobSchedule.CalculateNextRun(job, now);
-                            job.IsRunning = true;
+                                // Retain tasks so shutdown can await their scope disposal.
+                                runningTasks.Add(Task.Run(() => ExecuteJobAsync(job, stoppingToken)));
+                            }
                         }
 
-                        // Retain tasks so shutdown can await their scope disposal.
-                        runningTasks.Add(Task.Run(() => ExecuteJobAsync(job, stoppingToken)));
+                        if (nextWakeUp is null || jobNextRun < nextWakeUp)
+                            nextWakeUp = jobNextRun;
                     }
 
-                    await Task.Delay(1000, stoppingToken);
+                    var delay = nextWakeUp.HasValue ? nextWakeUp.Value - DateTime.UtcNow : MaxIdleWait;
+                    if (delay < MinWait)
+                        delay = MinWait;
+                    else if (delay > MaxIdleWait)
+                        delay = MaxIdleWait;
+
+                    var delayTask = Task.Delay(delay, stoppingToken);
+                    var changeTask = _registry.WaitForChangeAsync(stoppingToken);
+                    await Task.WhenAny(delayTask, changeTask);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

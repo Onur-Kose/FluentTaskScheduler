@@ -92,8 +92,8 @@ namespace FluentTaskScheduler.DSL
         /// Defines a time window (start-end) during which repeated jobs are allowed to run.
         /// Must be used together with Every(...).
         /// </summary>
-        /// <param name="start">Start time in 'HH:mm' format.</param>
-        /// <param name="end">End time in 'HH:mm' format.</param>
+        /// <param name="start">Start time in 'HH:mm' or 'HH:mm:ss' format.</param>
+        /// <param name="end">End time in 'HH:mm' or 'HH:mm:ss' format.</param>
         public SchedulerBuilder<T> Between(string start, string end)
         {
             EnsureForCalled();
@@ -227,13 +227,13 @@ namespace FluentTaskScheduler.DSL
         /// </summary>
         private static string GenerateJobName(string methodName)
         {
-            var serviceTypeName = typeof(T).Name
-                .Replace("Service", "")
-                .Replace("I", "");
+            var serviceTypeName = typeof(T).Name;
+            if (serviceTypeName.EndsWith("Service", StringComparison.Ordinal))
+                serviceTypeName = serviceTypeName[..^"Service".Length];
+            if (serviceTypeName.Length > 1 && serviceTypeName[0] == 'I' && char.IsUpper(serviceTypeName[1]))
+                serviceTypeName = serviceTypeName[1..];
 
-            var shortId = GenerateShortId();
-
-            return $"{serviceTypeName}_{methodName}_{shortId}";
+            return $"{serviceTypeName}_{methodName}{GenerateShortId()}";
         }
 
         private static TimeSpan ParseTime(string value, string parameterName)

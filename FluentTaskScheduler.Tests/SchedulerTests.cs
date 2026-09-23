@@ -51,6 +51,17 @@ public class SchedulerTests
     }
 
     [Fact]
+    public void GeneratedJobNamePreservesNonPrefixICharacters()
+    {
+        using var provider = CreateProvider();
+        var builder = new SchedulerBuilder<ITaskItemService>(provider);
+        builder.For(x => x.Record()).Every(TimeSpan.FromSeconds(1)).Do();
+        var jobs = provider.GetRequiredService<IScheduledJobRegistry>().GetJobs();
+        Assert.StartsWith("TaskItem_Record_", jobs[0].Name);
+        Assert.DoesNotContain("__", jobs[0].Name);
+    }
+
+    [Fact]
     public void DocumentedOverloadsRegisterSuccessfully()
     {
         using var provider = CreateProvider();
@@ -299,6 +310,11 @@ public class SchedulerTests
     {
         public List<string> Calls { get; } = [];
         public Task Record(string value) { Calls.Add(value); return Task.CompletedTask; }
+    }
+
+    public interface ITaskItemService
+    {
+        Task Record();
     }
 
     public sealed class ScopedJob(TaskCompletionSource<ScopedJob> started, Task release) : IAsyncDisposable
