@@ -15,7 +15,7 @@
 		<RepositoryUrl>https://github.com/onur-kose/FluentTaskScheduler</RepositoryUrl>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-
+		<PackageIcon>icon.png</PackageIcon>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -23,6 +23,7 @@
 		<InternalsVisibleTo Include="FluentTaskScheduler.Tests" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+		<None Include="assets\icon.png" Pack="true" PackagePath="" />
 	</ItemGroup>
 
 </Project>
