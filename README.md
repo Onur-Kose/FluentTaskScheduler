@@ -21,7 +21,7 @@ FluentTaskScheduler is a lightweight and fluent-style job scheduling library for
 Install from NuGet:
 
 ```
-dotnet add package FluentTaskScheduler --version 0.2.0
+dotnet add package FluentTaskScheduler --version 0.2.1
 ```
 
 ---
@@ -325,6 +325,23 @@ A custom `IJobStateStore` can provide another storage backend using the same exc
 
 ### Monitoring
 
+For an ASP.NET Core dashboard, add the separate `FluentTaskScheduler.UI` package to the web host:
+
+```powershell
+dotnet add package FluentTaskScheduler --version 0.2.1
+dotnet add package FluentTaskScheduler.UI --version 0.1.0-beta.1
+```
+
+Keep both as direct package references if the scheduler must remain installed when the UI is removed. The UI package also pulls in the scheduler transitively for applications that install only UI.
+
+```csharp
+using FluentTaskScheduler.UI;
+
+app.MapFluentTaskSchedulerDashboard(); // /scheduler, JSON at /scheduler/api/status
+```
+
+This single call maps the page and JSON API in Development only. It requires no UI service registration or static-file setup. To enable it in Production, use an authorized route group and `MapFluentTaskSchedulerDashboard(onlyInDevelopment: false)`; see the [UI package README](FluentTaskScheduler.UI/README.md) for the full example. The read-only dashboard shows registered jobs, running and paused state, next run, errors, and recent completed executions. A job detail panel shows start and finish times, duration, schedule, and error type/code. Recent history is in memory and limited to 100 entries.
+
 Resolve `SchedulerDiagnostics` (namespace `FluentTaskScheduler.Diagnostics`) and call `GetStatus()`
 from an application health endpoint. The result includes running/healthy state and per-job next run,
 last success, last start, error, outcome, and consecutive failures. Subscribe to `JobCompleted`
@@ -348,6 +365,7 @@ contention, completed-work deduplication, and lock release after a process is ki
 ```sh
 dotnet test FluentRunly.sln -c Release
 dotnet pack FluentTaskScheduler/FluentTaskScheduler.csproj -c Release -o artifacts/packages
+dotnet pack FluentTaskScheduler.UI/FluentTaskScheduler.UI.csproj -c Release -o artifacts/packages
 dotnet publish FluentTaskScheduler.AotSmoke/FluentTaskScheduler.AotSmoke.csproj -c Release -r win-x64 -p:PublishAot=true -o artifacts/aot-smoke
 ```
 
@@ -360,7 +378,6 @@ an application.
 
 * Cron expression support
 * Additional storage providers (SQLite, Redis)
-* Web dashboard for job monitoring
 * Additional scheduling policies
 
 ---

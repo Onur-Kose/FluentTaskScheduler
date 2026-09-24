@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FluentTaskScheduler\FluentTaskScheduler.csproj" />
+    <ProjectReference Include="..\FluentTaskScheduler.UI\FluentTaskScheduler.UI.csproj" />
+  </ItemGroup>
+</Project>

@@ -5,13 +5,28 @@ using System.Diagnostics.Metrics;
 namespace FluentTaskScheduler.Diagnostics;
 
 public sealed record JobStatus(string Key, string Name, string Outcome, DateTime? LastSuccessUtc,
-    DateTime? LastStartedUtc, DateTime NextRunUtc, string? Error, int ConsecutiveFailures);
+    DateTime? LastStartedUtc, DateTime NextRunUtc, string? Error, int ConsecutiveFailures)
+{
+    public DateTime? LastCompletedUtc { get; init; }
+    public TimeSpan? LastDuration { get; init; }
+    public string? ErrorType { get; init; }
+    public string? ErrorCode { get; init; }
+}
 public sealed record SchedulerStatus(bool IsRunning, bool IsHealthy, string? Error, IReadOnlyList<JobStatus> Jobs);
-public sealed record JobEvent(string Key, string Name, string Outcome, DateTime TimestampUtc, string? Error);
+public sealed record JobEvent(string Key, string Name, string Outcome, DateTime TimestampUtc, string? Error)
+{
+    public DateTime? StartedUtc { get; init; }
+    public TimeSpan? Duration { get; init; }
+    public string? ErrorType { get; init; }
+    public string? ErrorCode { get; init; }
+}
 
 /// <summary>Subscribe to the FluentTaskScheduler meter/activity source, or inspect GetStatus from a health endpoint.</summary>
 public sealed class SchedulerDiagnostics : IDisposable
 {
+    private const int MaxRecentEvents = 100;
+    private readonly Queue<JobEvent> _recentEvents = new();
+    private readonly object _eventsLock = new();
     public const string InstrumentationName = "FluentTaskScheduler";
     private readonly Meter _meter = new(InstrumentationName);
     private readonly ConcurrentDictionary<string, JobStatus> _jobs = new(StringComparer.Ordinal);
@@ -37,6 +52,11 @@ public sealed class SchedulerDiagnostics : IDisposable
     {
         var jobs = _jobs.Values.OrderBy(job => job.Key).ToArray();
         return new(_running, _running && _error is null && jobs.All(job => job.Error is null), _error, jobs);
+    }
+    /// <summary>Returns up to 100 recent completed executions, newest first. History is held in memory.</summary>
+    public IReadOnlyList<JobEvent> GetRecentEvents()
+    {
+        lock (_eventsLock) return _recentEvents.Reverse().ToArray();
     }
     internal void SetRunning(bool running) => _running = running;
     internal void InfrastructureError(Exception? error) => _error = error?.Message;
@@ -66,17 +86,44 @@ public sealed class SchedulerDiagnostics : IDisposable
         if (error is not null) _failures.Add(1);
         if (outcome == "TimedOut") _timeouts.Add(1);
         Record(key, name, outcome, nextRun, error);
+        var completedUtc = DateTime.UtcNow;
+        var startedUtc = _jobs.TryGetValue(key, out var current) ? current.LastStartedUtc : null;
+        _jobs.AddOrUpdate(key,
+            _ => new JobStatus(key, name, outcome, null, startedUtc, nextRun, error?.Message, error is null ? 0 : 1)
+            {
+                LastCompletedUtc = completedUtc, LastDuration = duration,
+                ErrorType = error?.GetType().FullName, ErrorCode = error is null ? null : $"0x{error.HResult:X8}"
+            },
+            (_, previous) => previous with
+            {
+                LastCompletedUtc = completedUtc, LastDuration = duration,
+                ErrorType = error?.GetType().FullName, ErrorCode = error is null ? null : $"0x{error.HResult:X8}"
+            });
+        var jobEvent = new JobEvent(key, name, outcome, completedUtc, error?.Message)
+        {
+            StartedUtc = startedUtc ?? completedUtc - duration,
+            Duration = duration,
+            ErrorType = error?.GetType().FullName,
+            ErrorCode = error is null ? null : $"0x{error.HResult:X8}"
+        };
+        lock (_eventsLock)
+        {
+            _recentEvents.Enqueue(jobEvent);
+            if (_recentEvents.Count > MaxRecentEvents) _recentEvents.Dequeue();
+        }
         if (JobCompleted is { } completed)
             foreach (Action<JobEvent> observer in completed.GetInvocationList())
-                try { observer(new(key, name, outcome, DateTime.UtcNow, error?.Message)); } catch { /* isolate telemetry observers */ }
+                try { observer(jobEvent); } catch { /* isolate telemetry observers */ }
     }
     internal void Record(string key, string name, string outcome, DateTime nextRun, Exception? error)
     {
         _jobs.AddOrUpdate(key, new JobStatus(key, name, outcome, outcome == "Succeeded" ? DateTime.UtcNow : null,
-            null, nextRun, error?.Message, error is null ? 0 : 1),
+            null, nextRun, error?.Message, error is null ? 0 : 1)
+            { ErrorType = error?.GetType().FullName, ErrorCode = error is null ? null : $"0x{error.HResult:X8}" },
             (_, previous) => previous with
             {
                 Name = name, Outcome = outcome, NextRunUtc = nextRun, Error = error?.Message,
+                ErrorType = error?.GetType().FullName, ErrorCode = error is null ? null : $"0x{error.HResult:X8}",
                 LastSuccessUtc = outcome == "Succeeded" ? DateTime.UtcNow : previous.LastSuccessUtc,
                 ConsecutiveFailures = error is null ? 0 : previous.ConsecutiveFailures + 1
             });

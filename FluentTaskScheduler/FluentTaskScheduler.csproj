@@ -8,7 +8,7 @@
 
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<PackageId>FluentTaskScheduler</PackageId>
-		<Version>0.2.0</Version>
+		<Version>0.2.1</Version>
 		<Authors>Onur Köse</Authors>
 		<Description>Fluent API-based background task scheduler for .NET</Description>
 		<PackageTags>scheduler;fluent;dotnet;DSL;background;jobs;task</PackageTags>

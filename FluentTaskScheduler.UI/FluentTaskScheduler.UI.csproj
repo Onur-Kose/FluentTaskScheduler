@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>FluentTaskScheduler.UI</PackageId>
+    <Version>0.1.0-beta.1</Version>
+    <Authors>Onur Köse</Authors>
+    <Description>Read-only web dashboard for FluentTaskScheduler</Description>
+    <PackageReleaseNotes>Initial beta dashboard release. The UI API may change before a stable version.</PackageReleaseNotes>
+    <PackageTags>scheduler;dashboard;monitoring;aspnetcore</PackageTags>
+    <RepositoryUrl>https://github.com/onur-kose/FluentTaskScheduler</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\FluentTaskScheduler\FluentTaskScheduler.csproj" />
+    <EmbeddedResource Include="wwwroot\index.html" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\FluentTaskScheduler\assets\icon.png" Pack="true" PackagePath="" Link="icon.png" />
+  </ItemGroup>
+</Project>

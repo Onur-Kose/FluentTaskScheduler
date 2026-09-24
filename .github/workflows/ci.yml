@@ -30,8 +30,10 @@ jobs:
         run: dotnet build FluentRunly.sln -c Release --no-restore -p:TreatWarningsAsErrors=true
       - name: Unit, integration, and cross-process tests
         run: dotnet test FluentRunly.sln -c Release --no-build --no-restore --logger trx
-      - name: Create NuGet package
+      - name: Create scheduler NuGet package
         run: dotnet pack FluentTaskScheduler/FluentTaskScheduler.csproj -c Release --no-build --no-restore -o artifacts/packages
+      - name: Create dashboard NuGet package
+        run: dotnet pack FluentTaskScheduler.UI/FluentTaskScheduler.UI.csproj -c Release --no-build --no-restore -o artifacts/packages
       - name: Verify package contents
         shell: pwsh
         run: ./build/Verify-Package.ps1

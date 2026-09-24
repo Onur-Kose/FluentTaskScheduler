@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 (scheduler) / 0.1.0-beta.1 (UI)
+
+- Add the optional `FluentTaskScheduler.UI` NuGet package for ASP.NET Core applications.
+- Map the read-only dashboard and JSON status endpoint with one call; routes are Development-only by default.
+- Show recent execution start and finish times, duration, exception type, and `HResult` code.
+- Package both scheduler and UI in CI and verify the UI package's dependency on the scheduler.
+
 ## 0.2.0
 
 - Validate public registrations and live mutations. Reject invalid edits atomically, keeping the previous valid definition.
