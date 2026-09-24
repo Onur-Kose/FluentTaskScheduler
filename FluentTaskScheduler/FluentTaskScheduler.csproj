@@ -21,8 +21,8 @@
 	<ItemGroup>
 		<None Update="README.md" Pack="true" PackagePath="\" />
 		<InternalsVisibleTo Include="FluentTaskScheduler.Tests" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
 		<None Include="assets\icon.png" Pack="true" PackagePath="" />
 	</ItemGroup>
 
