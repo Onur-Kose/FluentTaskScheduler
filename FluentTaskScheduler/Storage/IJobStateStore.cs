@@ -39,7 +39,9 @@ public sealed record JobState
 public sealed record JobScheduleState
 {
     public TimeSpan? RepeatEvery { get; init; }
+    public DateTime? RunOnceAtUtc { get; init; }
     public TimeSpan[] DailyAtTimes { get; init; } = [];
+    public string? DailyTimeZoneId { get; init; }
     public DayOfWeek[]? ExcludedDays { get; init; }
     public TimeSpan? IntervalStart { get; init; }
     public TimeSpan? IntervalEnd { get; init; }
@@ -50,7 +52,8 @@ public sealed record JobScheduleState
 
     internal static JobScheduleState From(TimedJobConfig job) => new()
     {
-        RepeatEvery = job.RepeatEvery, DailyAtTimes = job.DailyAtTimes.ToArray(),
+        RepeatEvery = job.RepeatEvery, RunOnceAtUtc = job.RunOnceAtUtc,
+        DailyAtTimes = job.DailyAtTimes.ToArray(), DailyTimeZoneId = job.DailyTimeZoneId,
         ExcludedDays = job.ExcludedDays?.ToArray(), IntervalStart = job.IntervalStart,
         IntervalEnd = job.IntervalEnd, Timeout = job.Timeout, Retry = job.Retry,
         IsPaused = job.IsPaused, IsManuallyRunning = job.IsRunning
@@ -58,7 +61,8 @@ public sealed record JobScheduleState
 
     internal void Apply(TimedJobConfig job) => job.Update(draft =>
     {
-        draft.RepeatEvery = RepeatEvery; draft.DailyAtTimes = DailyAtTimes;
+        draft.RepeatEvery = RepeatEvery; draft.RunOnceAtUtc = RunOnceAtUtc;
+        draft.DailyAtTimes = DailyAtTimes; draft.DailyTimeZoneId = DailyTimeZoneId;
         draft.ExcludedDays = ExcludedDays is null ? null : new JobCollection<DayOfWeek>(ExcludedDays); draft.IntervalStart = IntervalStart;
         draft.IntervalEnd = IntervalEnd; draft.Timeout = Timeout; draft.Retry = Retry;
         draft.IsPaused = IsPaused; draft.IsRunning = IsManuallyRunning;

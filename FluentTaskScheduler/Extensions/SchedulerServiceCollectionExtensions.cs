@@ -1,5 +1,4 @@
 ﻿using FluentTaskScheduler.Core;
-using FluentTaskScheduler.DSL;
 using FluentTaskScheduler.Execution;
 using FluentTaskScheduler.Diagnostics;
 using FluentTaskScheduler.Storage;
@@ -38,17 +37,6 @@ namespace FluentTaskScheduler.Extensions
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(directory);
             services.Replace(ServiceDescriptor.Singleton<IJobStateStore>(_ => new FileJobStateStore(directory)));
-            return services;
-        }
-
-        /// <summary>
-        /// Registers SchedulerBuilder&lt;T&gt; so that jobs can be configured using DI.
-        /// Example: services.AddSchedulerFor&lt;MyService&gt;();
-        /// </summary>
-        public static IServiceCollection AddSchedulerFor<T>(this IServiceCollection services)
-            where T : notnull
-        {
-            services.AddTransient<SchedulerBuilder<T>>();
             return services;
         }
 

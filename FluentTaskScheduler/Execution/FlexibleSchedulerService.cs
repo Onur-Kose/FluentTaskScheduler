@@ -170,7 +170,9 @@ public class FlexibleSchedulerService : BackgroundService
                 return;
             }
 
-            var nextRegularRun = JobSchedule.CalculateNextRun(snapshot, now);
+            var nextRegularRun = snapshot.RunOnceAtUtc.HasValue
+                ? DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc)
+                : JobSchedule.CalculateNextRun(snapshot, now);
             state = state with { ScheduledForUtc = state.ScheduledForUtc ?? state.NextRunUtc };
             // Checkpoint the occurrence BEFORE entering user code. A crash retries the same execution identity.
             await lease.SaveAsync(state, stoppingToken);

@@ -68,9 +68,6 @@ var host = Host.CreateDefaultBuilder(args)
         // Add the main scheduler service
         services.AddFluentTaskScheduler();
 
-        // Register the scheduler for your interface
-        services.AddSchedulerFor<IMyService>();
-
         // Register your actual service implementation
         services.AddTransient<IMyService, MyService>();
     })
@@ -80,7 +77,6 @@ var host = Host.CreateDefaultBuilder(args)
 Explanation:
 
 * AddFluentTaskScheduler() registers the background runner (FlexibleSchedulerService).
-* AddSchedulerFor<T>() prepares a builder that can create jobs for your specific service.
 * Your service (IMyService) is resolved from the dependency container at runtime.
 
 3. CREATE AND REGISTER YOUR JOB
@@ -91,7 +87,7 @@ After the host is built, obtain the scheduler builder and define your job.
 
 
 ```c#
-var scheduler = host.Services.GetRequiredService<SchedulerBuilder<IMyService>>();
+var scheduler = new SchedulerBuilder<IMyService>(host.Services);
 
 scheduler
     .For(x => x.DoWorkAsync())        // which method to execute
@@ -140,7 +136,22 @@ Run daily at 08:00 and 18:00:
 
 ```c#
 scheduler.For(x => x.DoWorkAsync())
-         .DailyAt("08:00", "18:00")
+         .DailyAtUtc("08:00", "18:00")
+         .Do();
+
+// Run once at a specific UTC instant:
+scheduler.For(x => x.DoWorkAsync())
+         .RunOnceAtUtc(new DateTime(2027, 1, 15, 12, 0, 0, DateTimeKind.Utc))
+         .Do();
+
+// 09:00 in Türkiye, using regional time-zone rules:
+scheduler.For(x => x.DoWorkAsync())
+         .DailyAtInTimeZone("09:00", "Europe/Istanbul")
+         .Do();
+
+// 09:00 at a fixed GMT+03:00 offset:
+scheduler.For(x => x.DoWorkAsync())
+         .DailyAtGmtOffset("09:00", TimeSpan.FromHours(3))
          .Do();
 ```
 
@@ -170,7 +181,10 @@ scheduler.For(x => x.DoWorkAsync())
 | ------------------------------------- | ------------------------------------ |
 | For(Expression<Func<T, Task>>)        | Specify the method to execute        |
 | Every(TimeSpan interval)              | Repeats the job every given interval |
-| DailyAt(params string[] times)        | Runs at specific daily times         |
+| DailyAtUtc(params string[] times)        | Runs at specific daily times         |
+| DailyAtInTimeZone(string time, string timeZoneId) | Runs at a regional wall-clock time |
+| DailyAtGmtOffset(string time, TimeSpan offset) | Runs at a fixed GMT offset |
+| RunOnceAtUtc(DateTime utcDateTime) | Runs once at a UTC instant |
 | Between(TimeSpan start, TimeSpan end) | Restrict job to a time window        |
 | NotRunThisDays(params DayOfWeek[])    | Exclude specific days                |
 | Do()                                  | Registers the job                    |
@@ -181,13 +195,13 @@ scheduler.For(x => x.DoWorkAsync())
 
 * The in-memory executor wakes for due times, completions, or registry changes. Persistent storage additionally refreshes shared state at a configurable interval. Every registry must implement `WaitForChangeAsync` for additions/live edits and honor cancellation.
 * Jobs run as tracked tasks, each with its own dependency injection scope.
-* Daily times, time windows, and excluded weekdays use UTC.
+* DailyAtUtc uses UTC. DailyAtInTimeZone uses the named zone for daily times and excluded weekdays; windows and interval exclusions use UTC.
 * Time windows include the start and exclude the end; overnight windows are not supported.
 * An interval that lands on an excluded day moves to the next allowed day, at midnight or the window start.
 * Each job keeps track of its own next execution time (NextRun).
 * Actual execution ownership prevents overlap; file storage additionally coordinates instances sharing the same directory and key.
-* If both .Every(...) and .DailyAt(...) are used together, an exception is thrown.
-* A job must specify either .Every(...) or .DailyAt(...). Intervals must be at least one second.
+* A job must specify exactly one schedule: .Every(...), a daily method, or .RunOnceAtUtc(...). Intervals must be at least one second.
+* RunOnceAtUtc requires DateTimeKind.Utc. A past time runs as soon as possible. Once the job succeeds or exhausts its retries, it remains completed, including after a restart with file storage.
 * .Do() completes a definition; call .For(...) again before configuring another job with the same builder.
 * Excluding all seven days also throws an exception to prevent silent never-runs.
 
@@ -216,13 +230,12 @@ services.AddFluentTaskScheduler(options =>
 });
 services.AddFileJobStateStore("/var/lib/my-app/scheduler"); // Windows: a dedicated writable directory
 services.AddScoped<IReportService, ReportService>();
-services.AddSchedulerFor<IReportService>();
 
 // After building the host, before RunAsync:
-var builder = host.Services.GetRequiredService<SchedulerBuilder<IReportService>>();
+var builder = new SchedulerBuilder<IReportService>(host.Services);
 builder.For((service, token) => service.GenerateAsync(token))
     .WithKey("reports.daily") // identical on every instance and after every restart
-    .DailyAt("08:00")
+    .DailyAtUtc("08:00")
     .WithTimeout(TimeSpan.FromMinutes(2))
     .WithRetry(new RetryPolicy
     {

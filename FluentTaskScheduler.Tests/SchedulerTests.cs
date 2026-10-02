@@ -46,7 +46,7 @@ public class SchedulerTests
     {
         using var provider = CreateProvider();
         var builder = new SchedulerBuilder<RecordingService>(provider).For(x => x.Record("job"));
-        Assert.Throws<ArgumentException>(() => builder.DailyAt(value));
+        Assert.Throws<ArgumentException>(() => builder.DailyAtUtc(value));
         Assert.Throws<ArgumentException>(() => builder.Between(value, "18:00"));
     }
 
@@ -66,12 +66,36 @@ public class SchedulerTests
     {
         using var provider = CreateProvider();
         var builder = new SchedulerBuilder<RecordingService>(provider);
-        builder.For(x => x.Record("daily")).DailyAt("08:00", "18:00:30").Do();
+        builder.For(x => x.Record("daily")).DailyAtUtc("08:00", "18:00:30").Do();
         builder.For(x => x.Record("interval")).Every(TimeSpan.FromMinutes(10))
             .Between(TimeSpan.FromHours(8), TimeSpan.FromHours(18)).Do();
         var jobs = provider.GetRequiredService<IScheduledJobRegistry>().GetJobs();
         Assert.Equal([TimeSpan.FromHours(8), new TimeSpan(18, 0, 30)], jobs[0].DailyAtTimes);
         Assert.Equal(TimeSpan.FromHours(8), jobs[1].IntervalStart);
+    }
+
+    [Fact]
+    public void DailyBuilderAcceptsRegionalAndFixedGmtTime()
+    {
+        using var provider = CreateProvider();
+        var builder = new SchedulerBuilder<RecordingService>(provider);
+        builder.For(x => x.Record("regional")).DailyAtInTimeZone("09:00", "Europe/Istanbul").Do();
+        builder.For(x => x.Record("fixed")).DailyAtGmtOffset("09:00", TimeSpan.FromHours(3)).Do();
+        var jobs = provider.GetRequiredService<IScheduledJobRegistry>().GetJobs();
+        Assert.Equal("Europe/Istanbul", jobs[0].DailyTimeZoneId);
+        Assert.Equal("GMT+03:00", jobs[1].DailyTimeZoneId);
+    }
+
+    [Fact]
+    public void OneTimeBuilderRequiresUtcAndRejectsOtherSchedules()
+    {
+        using var provider = CreateProvider();
+        var builder = new SchedulerBuilder<RecordingService>(provider);
+        Assert.Throws<ArgumentException>(() => builder.For(x => x.Record("bad"))
+            .RunOnceAtUtc(new DateTime(2027, 1, 1)));
+        Assert.Throws<InvalidOperationException>(() => builder.For(x => x.Record("mixed"))
+            .RunOnceAtUtc(new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+            .Every(TimeSpan.FromSeconds(1)).Do());
     }
 
     [Fact]
@@ -97,9 +121,9 @@ public class SchedulerTests
         var builder = new SchedulerBuilder<RecordingService>(provider);
         Assert.Throws<InvalidOperationException>(() => builder.For(x => x.Record("job")).Do());
         Assert.Throws<InvalidOperationException>(() => builder.For(x => x.Record("job"))
-            .DailyAt("08:00").Every(TimeSpan.FromSeconds(1)).Do());
+            .DailyAtUtc("08:00").Every(TimeSpan.FromSeconds(1)).Do());
         Assert.Throws<InvalidOperationException>(() => builder.For(x => x.Record("job"))
-            .DailyAt("08:00").Between("08:00", "18:00").Do());
+            .DailyAtUtc("08:00").Between("08:00", "18:00").Do());
     }
 
     [Theory]
@@ -132,6 +156,31 @@ public class SchedulerTests
         };
         Assert.Equal(Utc("2026-09-28T08:00:00Z"),
             JobSchedule.CalculateNextRun(job, Utc("2026-09-26T12:00:00Z")));
+    }
+
+    [Fact]
+    public void DailyScheduleUsesFixedGmtOffsetAndLocalWeekday()
+    {
+        var job = new TimedJobConfig
+        {
+            DailyAtTimes = [TimeSpan.FromHours(9)], DailyTimeZoneId = "GMT+03:00",
+            ExcludedDays = [DayOfWeek.Sunday]
+        };
+        Assert.Equal(Utc("2026-09-28T06:00:00Z"),
+            JobSchedule.CalculateNextRun(job, Utc("2026-09-26T23:30:00Z")));
+    }
+
+    [Fact]
+    public void DailyScheduleObservesDaylightSavingChanges()
+    {
+        var job = new TimedJobConfig
+        {
+            DailyAtTimes = [TimeSpan.FromHours(9)], DailyTimeZoneId = "Europe/Berlin"
+        };
+        Assert.Equal(Utc("2026-03-28T08:00:00Z"),
+            JobSchedule.CalculateNextRun(job, Utc("2026-03-28T07:00:00Z")));
+        Assert.Equal(Utc("2026-03-29T07:00:00Z"),
+            JobSchedule.CalculateNextRun(job, Utc("2026-03-28T08:00:00Z")));
     }
 
     [Fact]

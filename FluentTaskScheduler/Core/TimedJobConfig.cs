@@ -10,6 +10,8 @@ public class TimedJobConfig
     private JobCollection<TimeSpan> _dailyAtTimes;
     private JobCollection<DayOfWeek>? _excludedDays;
     private TimeSpan? _repeatEvery, _intervalStart, _intervalEnd, _timeout;
+    private DateTime? _runOnceAtUtc;
+    private string? _dailyTimeZoneId;
     private DateTime _nextRun;
     private bool _manualRunning, _executing, _paused, _registered;
     private RetryPolicy _retry = new();
@@ -54,6 +56,12 @@ public class TimedJobConfig
             Change(() => _dailyAtTimes.ReplaceSilently(items), true);
         }
     }
+    /// <summary>Time zone for daily times; null means UTC.</summary>
+    public string? DailyTimeZoneId
+    {
+        get { lock (this) return _dailyTimeZoneId; }
+        set => Change(() => _dailyTimeZoneId = value, true);
+    }
     public JobCollection<DayOfWeek>? ExcludedDays
     {
         get { lock (this) return _excludedDays; }
@@ -69,6 +77,8 @@ public class TimedJobConfig
         }
     }
     public TimeSpan? RepeatEvery { get { lock (this) return _repeatEvery; } set => Change(() => _repeatEvery = value, true); }
+    /// <summary>The single UTC occurrence for a one-time job.</summary>
+    public DateTime? RunOnceAtUtc { get { lock (this) return _runOnceAtUtc; } set => Change(() => _runOnceAtUtc = value, true); }
     public TimeSpan? IntervalStart { get { lock (this) return _intervalStart; } set => Change(() => _intervalStart = value, true); }
     public TimeSpan? IntervalEnd { get { lock (this) return _intervalEnd; } set => Change(() => _intervalEnd = value, true); }
     public DateTime NextRun
@@ -163,7 +173,9 @@ public class TimedJobConfig
     {
         _name = other._name; _key = other._key;
         _func = other._func; _cancellableFunc = other._cancellableFunc;
-        _repeatEvery = other._repeatEvery; _intervalStart = other._intervalStart; _intervalEnd = other._intervalEnd;
+        _repeatEvery = other._repeatEvery; _runOnceAtUtc = other._runOnceAtUtc;
+        _intervalStart = other._intervalStart; _intervalEnd = other._intervalEnd;
+        _dailyTimeZoneId = other._dailyTimeZoneId;
         _nextRun = other._nextRun; _timeout = other._timeout; _retry = other._retry;
         _manualRunning = other._manualRunning; _paused = other._paused;
         _dailyAtTimes.ReplaceSilently(other._dailyAtTimes.ToArray());
@@ -173,7 +185,9 @@ public class TimedJobConfig
     }
 
     private bool SameSchedule(TimedJobConfig other) =>
-        _repeatEvery == other._repeatEvery && _intervalStart == other._intervalStart && _intervalEnd == other._intervalEnd &&
+        _repeatEvery == other._repeatEvery && _runOnceAtUtc == other._runOnceAtUtc &&
+        _intervalStart == other._intervalStart && _intervalEnd == other._intervalEnd &&
+        _dailyTimeZoneId == other._dailyTimeZoneId &&
         _dailyAtTimes.SequenceEqual(other._dailyAtTimes) &&
         (_excludedDays ?? []).SequenceEqual(other._excludedDays ?? []);
 

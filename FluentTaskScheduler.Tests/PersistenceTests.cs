@@ -43,6 +43,36 @@ public class PersistenceTests
     }
 
     [Fact]
+    public async Task CompletedOneTimeJobDoesNotRunAgainAfterRestart()
+    {
+        using var directory = new TemporaryDirectory();
+        var due = DateTime.UtcNow.AddSeconds(-1);
+        var ran = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = new TimedJobConfig
+        {
+            Key = "once", RunOnceAtUtc = due, NextRun = due,
+            Func = _ => { ran.TrySetResult(); return Task.CompletedTask; }
+        };
+        await using (var harness = await Harness.Start(first, s => s.AddFileJobStateStore(directory.Path)))
+        {
+            await ran.Task.WaitAsync(Limit);
+            await Until(() => first.NextRun.Year == 9999 && !first.IsRunning);
+        }
+        var count = 0;
+        var second = new TimedJobConfig
+        {
+            Key = "once", RunOnceAtUtc = due, NextRun = due,
+            Func = _ => { Interlocked.Increment(ref count); return Task.CompletedTask; }
+        };
+        await using (var harness = await Harness.Start(second, s => s.AddFileJobStateStore(directory.Path)))
+        {
+            await Until(() => second.NextRun.Year == 9999 && !second.IsRunning);
+            await Task.Delay(100);
+            Assert.Equal(0, Volatile.Read(ref count));
+        }
+    }
+
+    [Fact]
     public async Task InterruptedOccurrenceRetainsExecutionIdentityAndRetryAttempt()
     {
         using var directory = new TemporaryDirectory();

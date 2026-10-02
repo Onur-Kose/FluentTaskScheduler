@@ -6,12 +6,24 @@ internal static class JobValidation
     {
         if (job.Func is null && job.CancellableFunc is null)
             throw new InvalidOperationException("A job must define Func or CancellableFunc.");
-        if ((job.DailyAtTimes.Count > 0) == job.RepeatEvery.HasValue)
-            throw new InvalidOperationException("Specify exactly one of Every(...) or DailyAt(...).");
+        var scheduleCount = (job.DailyAtTimes.Count > 0 ? 1 : 0) +
+            (job.RepeatEvery.HasValue ? 1 : 0) + (job.RunOnceAtUtc.HasValue ? 1 : 0);
+        if (scheduleCount != 1)
+            throw new InvalidOperationException("Specify exactly one of Every(...), a daily schedule, or RunOnceAtUtc(...).");
+        if (job.RunOnceAtUtc is { Kind: not DateTimeKind.Utc })
+            throw new ArgumentException("RunOnceAtUtc requires a DateTime with Kind.Utc.", nameof(job.RunOnceAtUtc));
+        if (job.RunOnceAtUtc.HasValue && job.ExcludedDays is { Count: > 0 })
+            throw new InvalidOperationException("Excluded days cannot be combined with RunOnceAtUtc(...).");
         if (job.RepeatEvery is { } interval && interval < TimeSpan.FromSeconds(1))
             throw new ArgumentOutOfRangeException(nameof(job.RepeatEvery), "Intervals must be at least one second.");
         if (job.DailyAtTimes.Any(time => time < TimeSpan.Zero || time >= TimeSpan.FromDays(1)))
             throw new ArgumentOutOfRangeException(nameof(job.DailyAtTimes));
+        if (job.DailyTimeZoneId is { } zoneId)
+        {
+            if (job.DailyAtTimes.Count == 0 || string.IsNullOrWhiteSpace(zoneId))
+                throw new InvalidOperationException("A daily time zone requires daily times.");
+            _ = DailyTimeZone.Resolve(zoneId);
+        }
         if (job.ExcludedDays is { } days && (days.Any(day => !Enum.IsDefined(day)) || days.Distinct().Count() == 7))
             throw new InvalidOperationException("Excluded days must be valid and leave at least one allowed day.");
         if (job.IntervalStart.HasValue != job.IntervalEnd.HasValue ||

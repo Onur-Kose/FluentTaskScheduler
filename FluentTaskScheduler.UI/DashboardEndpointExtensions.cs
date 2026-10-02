@@ -70,6 +70,8 @@ public static class DashboardEndpointExtensions
                     LastDuration = match?.LastDuration,
                     ErrorType = match?.ErrorType,
                     ErrorCode = match?.ErrorCode,
+                    DailyTimeZoneId = definition.DailyTimeZoneId,
+                    RunOnceAtUtc = definition.RunOnceAtUtc,
                     IntervalStart = definition.IntervalStart,
                     IntervalEnd = definition.IntervalEnd,
                     ExcludedDays = definition.ExcludedDays?.ToArray() ?? []
@@ -102,6 +104,8 @@ public sealed record DashboardJob(string Key, string Name, string Outcome, DateT
     DateTime? LastStartedUtc, DateTime? LastSuccessUtc, string? Error, int ConsecutiveFailures,
     bool IsPaused, TimeSpan? RepeatEvery, IReadOnlyList<TimeSpan> DailyAtTimes)
 {
+    public string? DailyTimeZoneId { get; init; }
+    public DateTime? RunOnceAtUtc { get; init; }
     public DateTime? LastCompletedUtc { get; init; }
     public TimeSpan? LastDuration { get; init; }
     public string? ErrorType { get; init; }

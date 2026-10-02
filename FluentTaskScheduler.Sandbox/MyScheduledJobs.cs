@@ -26,7 +26,7 @@ namespace FluentTaskScheduler.Sandbox
             // Job 3: Daily task at specific time
             For<IMyService>(x => x.StepTwoAsync())
                 .WithKey("sample.daily")
-                .DailyAt("09:00")
+                .DailyAtUtc("09:00")
                 .Do();
         }
     }

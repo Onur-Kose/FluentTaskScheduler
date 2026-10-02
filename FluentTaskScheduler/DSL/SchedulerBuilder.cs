@@ -1,4 +1,4 @@
-﻿using FluentTaskScheduler.Core;
+using FluentTaskScheduler.Core;
 using Microsoft.Extensions.DependencyInjection;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -7,7 +7,7 @@ namespace FluentTaskScheduler.DSL
 {
     /// <summary>
     /// Fluent DSL builder that allows defining scheduled jobs using chained syntax.
-    /// Supports DailyAt, Every, Between, exclusion days, and multi-step sequencing.
+    /// Supports DailyAtUtc, DailyAtInTimeZone, Every, Between, exclusion days, and multi-step sequencing.
     /// </summary>
     public class SchedulerBuilder<T> where T : notnull
     {
@@ -26,7 +26,7 @@ namespace FluentTaskScheduler.DSL
         }
         /// <summary>
         /// Defines the first action that will be executed by this job.
-        /// Must be called before using ThenFor, DailyAt, Every, Between, or NotRunThisDays.
+        /// Must be called before using ThenFor, DailyAtUtc, Every, Between, or NotRunThisDays.
         /// </summary>
         /// <param name="method">The async method expression to execute.</param>
         /// <param name="name">Optional custom job name.</param>
@@ -66,22 +66,59 @@ namespace FluentTaskScheduler.DSL
         /// Schedules the job to run every day at the specified time.
         /// </summary>
         /// <param name="time">Time format must be 'HH:mm' or 'HH:mm:ss'.</param>
-        public SchedulerBuilder<T> DailyAt(string time)
+        public SchedulerBuilder<T> DailyAtUtc(string time)
         {
             EnsureForCalled();
+            if (_config.DailyTimeZoneId is not null)
+                throw new InvalidOperationException("All daily times must use the same time zone.");
             _config.DailyAtTimes.Add(ParseTime(time, nameof(time)));
             return this;
         }
 
-        public SchedulerBuilder<T> DailyAt(params string[] times)
+        public SchedulerBuilder<T> DailyAtUtc(params string[] times)
         {
             EnsureForCalled();
+            if (_config.DailyTimeZoneId is not null)
+                throw new InvalidOperationException("All daily times must use the same time zone.");
             ArgumentNullException.ThrowIfNull(times);
             if (times.Length == 0)
                 throw new ArgumentException("Specify at least one daily time.", nameof(times));
 
             var parsedTimes = times.Select(time => ParseTime(time, nameof(times))).ToArray();
             _config.DailyAtTimes.AddRange(parsedTimes);
+            return this;
+        }
+        /// <summary>Schedules a daily wall-clock time in an IANA or Windows time zone.</summary>
+        /// <remarks>Time zone rules, including daylight saving changes, are applied on each run.</remarks>
+        public SchedulerBuilder<T> DailyAtInTimeZone(string time, string timeZoneId)
+        {
+            EnsureForCalled();
+            ArgumentException.ThrowIfNullOrWhiteSpace(timeZoneId);
+            _ = DailyTimeZone.Resolve(timeZoneId);
+            var parsedTime = ParseTime(time, nameof(time));
+            if (_config.DailyAtTimes.Count > 0 && _config.DailyTimeZoneId != timeZoneId)
+                throw new InvalidOperationException("All daily times must use the same time zone.");
+            _config.DailyTimeZoneId = timeZoneId;
+            _config.DailyAtTimes.Add(parsedTime);
+            return this;
+        }
+        /// <summary>Schedules a daily time at a fixed GMT offset, without daylight saving changes.</summary>
+        public SchedulerBuilder<T> DailyAtGmtOffset(string time, TimeSpan offset)
+        {
+            if (offset < TimeSpan.FromHours(-14) || offset > TimeSpan.FromHours(14) ||
+                offset.Ticks % TimeSpan.TicksPerMinute != 0)
+                throw new ArgumentOutOfRangeException(nameof(offset));
+            var sign = offset < TimeSpan.Zero ? "-" : "+";
+            var magnitude = offset.Duration();
+            return DailyAtInTimeZone(time, $"GMT{sign}{magnitude:hh\\:mm}");
+        }
+        /// <summary>Runs once at the specified UTC instant. A time in the past runs as soon as possible.</summary>
+        public SchedulerBuilder<T> RunOnceAtUtc(DateTime utcDateTime)
+        {
+            EnsureForCalled();
+            if (utcDateTime.Kind != DateTimeKind.Utc)
+                throw new ArgumentException("The date must have DateTimeKind.Utc.", nameof(utcDateTime));
+            _config.RunOnceAtUtc = utcDateTime;
             return this;
         }
         /// <summary>
@@ -146,11 +183,10 @@ namespace FluentTaskScheduler.DSL
             if (_steps.Count == 0)
                 throw new InvalidOperationException("No steps defined for execution.");
 
-            if (_config.DailyAtTimes.Count != 0 && _config.RepeatEvery.HasValue)
-                throw new InvalidOperationException("You cannot use both .DailyAt(...) and .Every(...). These options are mutually exclusive.");
-
-            if (_config.DailyAtTimes.Count == 0 && !_config.RepeatEvery.HasValue)
-                throw new InvalidOperationException("Specify either Every(...) or DailyAt(...).");
+            var scheduleCount = (_config.DailyAtTimes.Count > 0 ? 1 : 0) +
+                (_config.RepeatEvery.HasValue ? 1 : 0) + (_config.RunOnceAtUtc.HasValue ? 1 : 0);
+            if (scheduleCount != 1)
+                throw new InvalidOperationException("Specify exactly one of Every(...), a daily schedule, or RunOnceAtUtc(...).");
 
             if (_config.ExcludedDays?.Length == 7)
                 throw new InvalidOperationException("All days are excluded. The job would never run. Change NotRunThisDays");

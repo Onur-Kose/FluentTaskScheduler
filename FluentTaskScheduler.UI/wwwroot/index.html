@@ -79,8 +79,8 @@
       grid.append(detailBox('Son başlangıç',preciseDate(job.lastStartedUtc)),detailBox('Son bitiş',preciseDate(job.lastCompletedUtc)),detailBox('Son çalışma süresi',duration(job.lastDuration)),detailBox('Sonraki çalışma',job.isPaused?'Duraklatıldı':preciseDate(job.nextRunUtc)),detailBox('Son başarı',preciseDate(job.lastSuccessUtc)),detailBox('Ardışık hata',String(job.consecutiveFailures)));
       timing.append(grid);body.append(timing);
       const schedule=section('Zamanlama'),scheduleGrid=node('div','detail-grid');
-      scheduleGrid.append(detailBox('Tekrarlama',job.repeatEvery||'Günlük zamanlama'),detailBox('Günlük saatler',(job.dailyAtTimes||[]).join(', ')||'—'));
-      if(job.intervalStart||job.intervalEnd)scheduleGrid.append(detailBox('Çalışma aralığı',(job.intervalStart||'00:00')+' – '+(job.intervalEnd||'24:00')));
+      scheduleGrid.append(detailBox('Tekrarlama',job.repeatEvery||(job.runOnceAtUtc?'Tek seferlik':'Günlük zamanlama')),detailBox('Günlük saatler',(job.dailyAtTimes||[]).map(t=>t+' '+(job.dailyTimeZoneId||'UTC')).join(', ')||'—'));
+      if(job.runOnceAtUtc)scheduleGrid.append(detailBox('Tek seferlik UTC',new Date(job.runOnceAtUtc).toISOString()));if(job.intervalStart||job.intervalEnd)scheduleGrid.append(detailBox('Çalışma aralığı',(job.intervalStart||'00:00')+' – '+(job.intervalEnd||'24:00')));
       if((job.excludedDays||[]).length)scheduleGrid.append(detailBox('Hariç tutulan günler',job.excludedDays.join(', ')));
       schedule.append(scheduleGrid);body.append(schedule);
       if(job.error){const errorSection=section('Son hata'),box=node('div','error-box');box.append(node('strong','','Hata ayrıntısı'),node('p','',job.error));const meta=node('div','error-meta');if(job.errorType)meta.append(node('code','',job.errorType));if(job.errorCode)meta.append(node('code','',job.errorCode));box.append(meta);errorSection.append(box);body.append(errorSection)}

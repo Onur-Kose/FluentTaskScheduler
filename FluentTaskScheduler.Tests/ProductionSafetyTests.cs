@@ -22,6 +22,24 @@ public class ProductionSafetyTests
     };
 
     [Fact]
+    public async Task OneTimeJobRunsOnceAndRemainsCompleted()
+    {
+        var count = 0;
+        var ran = Signal();
+        var scheduledAt = DateTime.UtcNow.AddSeconds(-1);
+        var job = new TimedJobConfig
+        {
+            RunOnceAtUtc = scheduledAt, NextRun = scheduledAt,
+            Func = _ => { Interlocked.Increment(ref count); ran.TrySetResult(); return Task.CompletedTask; }
+        };
+        await using var harness = await Harness.Start(job);
+        await ran.Task.WaitAsync(Limit);
+        await Until(() => job.NextRun.Year == 9999 && !job.IsRunning);
+        await Task.Delay(150);
+        Assert.Equal(1, Volatile.Read(ref count));
+    }
+
+    [Fact]
     public void InvalidRegistrationIsRejectedWithoutPoisoningRegistry()
     {
         var registry = new ScheduledJobRegistry();
